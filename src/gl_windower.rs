@@ -1,5 +1,4 @@
 use std::num::NonZero;
-use glow::HasContext;
 use glutin::{
     context::NotCurrentContext, config::{Config, ConfigTemplateBuilder, GetGlConfig}, context::{ContextApi, ContextAttributesBuilder, PossiblyCurrentContext, Version}, display::GetGlDisplay, prelude::*, surface::{Surface, WindowSurface}
 };
@@ -11,10 +10,8 @@ use winit::{
 use crate::gl_renderer::GlRenderer;
 
 enum GlDisplayCreationState {
-    /// The display was not build yet.
     Unbuilt(DisplayBuilder),
-    /// The display was already created for the application.
-    Built,
+    AlreadyBuilt,
 }
 
 struct AppState {
@@ -61,11 +58,11 @@ impl ApplicationHandler for GlWindower {
 
                 self.gl_context = Some(create_gl_context(&window, &config).treat_as_possibly_current());
                 
-                self.gl_display = GlDisplayCreationState::Built;
+                self.gl_display = GlDisplayCreationState::AlreadyBuilt;
 
                 (window, config)
             }
-            GlDisplayCreationState::Built => {
+            GlDisplayCreationState::AlreadyBuilt => {
                 let gl_config = self.gl_context.as_ref().unwrap().config();
                 match glutin_winit::finalize_window(event_loop, window_attributes(), &gl_config) {
                     Ok(window) => (window, gl_config),
@@ -192,7 +189,7 @@ fn create_gl_context(window: &Window, gl_config: &Config) -> NotCurrentContext {
     // There are also some old devices that support neither modern OpenGL nor GLES.
     // To support these we can try and create a 2.1 context.
     let legacy_context_attributes = ContextAttributesBuilder::new()
-        .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 1))))
+        .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
         .build(raw_window_handle);
 
     // Reuse the uncurrented context from a suspended() call if it exists, otherwise

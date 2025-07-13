@@ -1,0 +1,8 @@
+[package]
+name = "gl_snake"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glow = "0.16.0"
+glutin = "0.32.3"

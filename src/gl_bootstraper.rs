@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, num::NonZero, rc::Rc};
+use std::{num::NonZero};
 use glutin::{
     context::NotCurrentContext, config::{Config, ConfigTemplateBuilder, GetGlConfig}, context::{ContextApi, ContextAttributesBuilder, PossiblyCurrentContext, Version}, display::GetGlDisplay, prelude::*, surface::{Surface, WindowSurface}
 };

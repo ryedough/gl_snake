@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use glutin::config::ConfigTemplateBuilder;
-use crate::{gl_app::GlApp, gl_bootstraper::GlBootstraper, object::Square, shader::BasicShader};
+use crate::{gl_app::{GlApp, GlAppOwnedData}, gl_bootstraper::GlBootstraper, object::Square, shader::BasicShader};
 
 mod shader;
 mod mesh;
@@ -17,6 +17,6 @@ fn main() {
 
 fn on_app_init(app : &mut GlApp) {
     let basic = Rc::new(BasicShader::new(&app.gl));
-    let new_item = Box::new(Square::new(app, basic.clone()));
-    app.renderable.push(new_item);
+    let square = Square::new(app, basic.clone());
+    app.take(GlAppOwnedData::All(Box::from(square)));
 }

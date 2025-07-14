@@ -2,7 +2,7 @@ use std::fs;
 
 use glow::{HasContext, NativeProgram, NativeUniformLocation};
 
-use crate::shader::gen_program;
+use crate::shader::{gen_program, Shader};
 pub struct BasicShader {
     program : NativeProgram,
     u_time_location : NativeUniformLocation
@@ -31,8 +31,10 @@ impl BasicShader {
             gl.uniform_1_f32(Some(&self.u_time_location), time);
         }
     }
+}
 
-    pub fn use_shader(&self, gl: &glow::Context) {
+impl Shader for BasicShader {
+    fn use_shader(&self, gl: &glow::Context) {
         unsafe {
             gl.use_program(Some(self.program));
         }

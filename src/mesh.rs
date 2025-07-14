@@ -1,38 +1,19 @@
-use std::{mem, time::{self, Duration}};
+use core::time;
+use std::{mem, rc::Rc};
 
-use glow::{HasContext, NativeBuffer, NativeVertexArray, COLOR_BUFFER_BIT, STATIC_DRAW};
+use glow::{HasContext, NativeBuffer, NativeVertexArray};
 
-use crate::shader::BasicShader;
+use crate::{gl_app::Renderable, shader::Shader};
 
-pub struct GlRenderer {
-    gl: glow::Context,
-    t_last_render: time::SystemTime,
-    t_0 : time::SystemTime,
-    vao : Option<NativeVertexArray>,
-    vbo : Option<NativeBuffer>,
-    ebo : Option<NativeBuffer>,
-    basic_shader : BasicShader,
+pub struct Mesh<T : Shader> {
+    shader : Rc<T>,
+    vao : NativeVertexArray,
+    vbo : NativeBuffer, 
+    ebo : NativeBuffer,
 }
 
-impl GlRenderer {
-    pub fn new(gl: glow::Context) -> Self {
-        let basic_shader = BasicShader::new(&gl);
-        let mut renderer = Self {
-            gl,
-            vao : None, 
-            vbo : None, 
-            ebo : None, 
-            basic_shader,
-            t_last_render: time::SystemTime::now(),
-            t_0: time::SystemTime::now(),
-        };
-        renderer.init_buffers();
-        
-        renderer
-    }
-
-    pub fn init_buffers(&mut self) {
-        let gl = &self.gl; // i dont feel like to write `self` every single time
+impl<T:Shader> Mesh<T> {
+    pub fn new(gl : &glow::Context, shader : Rc<T>) -> Self {
         let (vbo, vao, ebo) = unsafe {
             // mesh
             let vert = [
@@ -76,39 +57,20 @@ impl GlRenderer {
             gl.bind_vertex_array(None);
             gl.bind_buffer(glow::ARRAY_BUFFER, None);
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
-
-            (vbo, vao, ebo)
+            (vbo, vao, ebo) 
         };
-        self.vao = Some(vao);
-        self.vbo = Some(vbo);
-        self.ebo = Some(ebo);
-    }
 
-    pub fn render(&mut self) {
-        self.calc_delta();
+        Self { shader, vao, vbo, ebo }
+    }
+}
+
+impl<T:Shader> Renderable for Mesh<T> {
+    fn render(&self, gl : &glow::Context, _ : &time::Duration, _ : &time::Duration) {
+        self.shader.use_shader(gl);
 
         unsafe {
-            self.gl.clear_color(0., 0.5, 0.5, 1.);
-            self.gl.clear(COLOR_BUFFER_BIT);
+            gl.bind_vertex_array(Some(self.vao));
+            gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
         }
-
-        unsafe {
-            self.basic_shader.use_shader(&self.gl);
-            self.basic_shader.set_time(&self.gl, self.elapsed().as_secs_f32());
-            self.gl.bind_vertex_array(self.vao);
-            self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
-        }
-    }
-
-    fn calc_delta(&mut self) -> time::Duration {
-        let delta = time::SystemTime::now()
-            .duration_since(self.t_last_render)
-            .unwrap();
-        self.t_last_render = time::SystemTime::now();
-        delta
-    }
-
-    fn elapsed(&self) -> time::Duration {
-        self.t_0.elapsed().unwrap()
     }
 }

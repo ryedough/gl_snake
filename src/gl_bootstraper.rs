@@ -1,4 +1,4 @@
-use std::num::NonZero;
+use std::{cell::RefCell, collections::HashMap, num::NonZero, rc::Rc};
 use glutin::{
     context::NotCurrentContext, config::{Config, ConfigTemplateBuilder, GetGlConfig}, context::{ContextApi, ContextAttributesBuilder, PossiblyCurrentContext, Version}, display::GetGlDisplay, prelude::*, surface::{Surface, WindowSurface}
 };
@@ -7,7 +7,7 @@ use winit::{
     application::ApplicationHandler, error::EventLoopError, event::WindowEvent, event_loop::{ControlFlow, EventLoop}, keyboard::Key, raw_window_handle::HasWindowHandle, window::{Window, WindowAttributes}
 };
 
-use crate::gl_renderer::GlRenderer;
+use crate::gl_app::GlApp;
 
 enum GlDisplayCreationState {
     Unbuilt(DisplayBuilder),
@@ -19,22 +19,25 @@ struct AppState {
     gl_surface: Surface<WindowSurface>,
 }
 
-pub struct GlWindower {
+pub struct GlBootstraper {
     state: Option<AppState>,
     gl_context: Option<PossiblyCurrentContext>,
     gl_display: GlDisplayCreationState,
     template: ConfigTemplateBuilder,
-    renderer : Option<GlRenderer>,
+    app : Option<GlApp>,
+    on_app_init : fn(&mut GlApp),
 }
 
-impl GlWindower {
-    pub fn new(template: ConfigTemplateBuilder) -> Self {
+// responsible for creating window and gl context
+impl GlBootstraper {
+    pub fn new(template: ConfigTemplateBuilder, on_app_init : fn(&mut GlApp)) -> Self {
         Self {
             state: None,
             gl_context: None,
-            renderer : None,
+            app : None,
             gl_display: GlDisplayCreationState::Unbuilt(DisplayBuilder::new().with_window_attributes(Some(window_attributes()))),
             template: template,
+            on_app_init
         }
     }
 
@@ -46,7 +49,7 @@ impl GlWindower {
     } 
 }
 
-impl ApplicationHandler for GlWindower {
+impl ApplicationHandler for GlBootstraper {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let (window, gl_config) = match &self.gl_display {
             GlDisplayCreationState::Unbuilt(display_builder) => {
@@ -84,9 +87,11 @@ impl ApplicationHandler for GlWindower {
         let gl_context = self.gl_context.as_ref().unwrap();
         gl_context.make_current(&gl_surface).unwrap();
 
-        self.renderer.get_or_insert_with(|| {
+        self.app.get_or_insert_with(|| {
             let gl = unsafe { glow::Context::from_loader_function_cstr(|s|self.gl_context.as_ref().unwrap().display().get_proc_address(s)) };
-            GlRenderer::new(gl)
+            let mut renderer = GlApp::new(gl);
+            (self.on_app_init)(&mut renderer);
+            renderer
         });
 
         assert!(
@@ -102,14 +107,6 @@ impl ApplicationHandler for GlWindower {
         event: winit::event::WindowEvent,
     ) {
         match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            },
-            WindowEvent::KeyboardInput { device_id : _, event, is_synthetic : _ } => {
-                if event.logical_key == Key::Named(winit::keyboard::NamedKey::Escape) {
-                    event_loop.exit();
-                }
-            }
             WindowEvent::Resized(size) if size.width != 0 && size.height != 0 => {
                 if let Some(AppState {
                     window: _,
@@ -124,7 +121,7 @@ impl ApplicationHandler for GlWindower {
                     );
                 }
             }
-            _ => (),
+            event => {self.app.as_mut().map(|app|app.window_event(event_loop, window_id, event));},
         }
     }
     fn exiting(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
@@ -145,7 +142,7 @@ impl ApplicationHandler for GlWindower {
     fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         if let Some(AppState { gl_surface, window }) = self.state.as_ref() {
             let gl_context = self.gl_context.as_ref().unwrap();
-            self.renderer.as_mut().map(|r|r.render());
+            self.app.as_mut().map(|r|r.render());
             window.request_redraw();
 
             gl_surface.swap_buffers(gl_context).unwrap();

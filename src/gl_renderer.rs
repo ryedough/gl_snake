@@ -1,124 +1,91 @@
-use std::{ffi::c_uint, fs, mem, time};
+use std::{mem, time::{self, Duration}};
 
 use glow::{HasContext, NativeBuffer, NativeVertexArray, COLOR_BUFFER_BIT, STATIC_DRAW};
+
+use crate::shader::BasicShader;
 
 pub struct GlRenderer {
     gl: glow::Context,
     t_last_render: time::SystemTime,
+    t_0 : time::SystemTime,
     vao : Option<NativeVertexArray>,
     vbo : Option<NativeBuffer>,
     ebo : Option<NativeBuffer>,
-    program: Option<glow::NativeProgram>,
+    basic_shader : BasicShader,
 }
 
 impl GlRenderer {
     pub fn new(gl: glow::Context) -> Self {
+        let basic_shader = BasicShader::new(&gl);
         let mut renderer = Self {
             gl,
             vao : None, 
             vbo : None, 
             ebo : None, 
+            basic_shader,
             t_last_render: time::SystemTime::now(),
-            program: None,
+            t_0: time::SystemTime::now(),
         };
-        renderer.init_shader();
         renderer.init_buffers();
         
         renderer
     }
 
-    fn init_shader(&mut self) {
-        let gl = &self.gl; // i dont feel like to write `self` every single time
-
-        let (vs_src, fs_src) = {
-            let vs = fs::read_to_string("./shader/.vs").expect("can't load vertex shader");
-            let fs = fs::read_to_string("./shader/.fs").expect("can't load fragment shader");
-            (vs, fs)
-        };
-
-        let (vs, fs) = unsafe {
-            let vs = match gl.create_shader(glow::VERTEX_SHADER) {
-                Ok(vs) => vs,
-                Err(err) => panic!("{err}"),
-            };
-            gl.shader_source(vs, &vs_src);
-            gl.compile_shader(vs);
-            if !gl.get_shader_compile_status(vs) {
-                panic!("{}", gl.get_shader_info_log(vs));
-            };
-
-            let fs = match gl.create_shader(glow::FRAGMENT_SHADER) {
-                Ok(fs) => fs,
-                Err(err) => panic!("{err}"),
-            };
-            gl.shader_source(fs, &fs_src);
-            gl.compile_shader(fs);
-            if !gl.get_shader_compile_status(fs) {
-                panic!("{}", gl.get_shader_info_log(fs));
-            };
-            (vs, fs)
-        };
-
-        let program = unsafe {
-            let program = match gl.create_program() {
-                Ok(p) => p,
-                Err(err) => {
-                    panic!("{err}")
-                }
-            };
-            gl.attach_shader(program, vs);
-            gl.attach_shader(program, fs);
-            gl.link_program(program);
-            if !gl.get_program_link_status(program) {
-                panic!("{}", gl.get_program_link_status(program));
-            }
-
-            gl.delete_shader(fs);
-            gl.delete_shader(vs);
-
-            program
-        };
-
-        self.program = Some(program);
-    }
-
     pub fn init_buffers(&mut self) {
         let gl = &self.gl; // i dont feel like to write `self` every single time
-        let (vbo, vao) = unsafe {
-            // This is a flat array of f32s that are to be interpreted as vec2s.
-            let triangle_vertices = [0.5f32, 1.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32];
-            let triangle_vertices_u8: &[u8] = core::slice::from_raw_parts(
-                triangle_vertices.as_ptr() as *const u8,
-                triangle_vertices.len() * core::mem::size_of::<f32>(),
+        let (vbo, vao, ebo) = unsafe {
+            // mesh
+            let vert = [
+                0.5f32,  0.5, 0.0,  // top right
+                1.,  0., 0.0,  // color
+                0.5, -0.5, 0.0,  // bottom right
+                0.,  1., 0.0,  // color
+                -0.5, -0.5, 0.0,  // bottom left
+                0.,  0., 1.,  // color
+                -0.5,  0.5, 0.0,   // top left 
+                1.,  1., 1.,  // color
+            ];
+            let vert: &[u8] = core::slice::from_raw_parts(
+                vert.as_ptr() as *const u8,
+                vert.len() * core::mem::size_of::<f32>(),
+            );
+            let indices = [  // note that we start from 0!
+                0u32, 1, 3,   // first triangle
+                1, 2, 3    // second triangle
+            ];
+            let indices = core::slice::from_raw_parts(
+                indices.as_ptr() as *const u8,
+                indices.len() * mem::size_of::<u32>()
             );
 
-            // We construct a buffer and upload the data
-            let vbo = gl.create_buffer().unwrap();
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, triangle_vertices_u8, glow::STATIC_DRAW);
-
-            // We now construct a vertex array to describe the format of the input buffer
+            // vertex arrays
             let vao = gl.create_vertex_array().unwrap();
+            let vbo = gl.create_buffer().unwrap();
+            let ebo = gl.create_buffer().unwrap();
             gl.bind_vertex_array(Some(vao));
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, vert, glow::STATIC_DRAW);
+            gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, indices, glow::STATIC_DRAW);
 
-            (vbo, vao)
+            gl.enable_vertex_attrib_array(0);
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 6 * mem::size_of::<f32>() as i32, 0);
+            gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 6 * mem::size_of::<f32>() as i32, 3 * mem::size_of::<f32>() as i32);
+
+            gl.bind_vertex_array(None);
+            gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+
+            (vbo, vao, ebo)
         };
         self.vao = Some(vao);
         self.vbo = Some(vbo);
+        self.ebo = Some(ebo);
     }
 
     pub fn render(&mut self) {
-        let delta = time::SystemTime::now()
-            .duration_since(self.t_last_render)
-            .unwrap();
-        self.t_last_render = time::SystemTime::now();
-
-        // println!(
-        //     "{} fps",
-        //     time::Duration::from_secs(1).div_duration_f32(delta) as u32
-        // );
+        self.calc_delta();
 
         unsafe {
             self.gl.clear_color(0., 0.5, 0.5, 1.);
@@ -126,9 +93,22 @@ impl GlRenderer {
         }
 
         unsafe {
+            self.basic_shader.use_shader(&self.gl);
+            self.basic_shader.set_time(&self.gl, self.elapsed().as_secs_f32());
             self.gl.bind_vertex_array(self.vao);
-            self.gl.use_program(self.program);
-            self.gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
         }
+    }
+
+    fn calc_delta(&mut self) -> time::Duration {
+        let delta = time::SystemTime::now()
+            .duration_since(self.t_last_render)
+            .unwrap();
+        self.t_last_render = time::SystemTime::now();
+        delta
+    }
+
+    fn elapsed(&self) -> time::Duration {
+        self.t_0.elapsed().unwrap()
     }
 }

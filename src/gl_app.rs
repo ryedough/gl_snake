@@ -1,48 +1,86 @@
-use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, time::{self, Duration}};
+use std::{collections::HashMap, time};
 
-use glow::{HasContext, NativeBuffer, NativeVertexArray, COLOR_BUFFER_BIT, STATIC_DRAW};
-use winit::{event::WindowEvent, keyboard::Key};
+use glow::{COLOR_BUFFER_BIT, HasContext};
 
-use crate::{mesh::{Mesh}, shader::{BasicShader, Shader}};
+pub enum GlAppOwnedData {
+    Updateable(Box<dyn Updateable>),
+    InputListener(Box<dyn InputListener>),
+    All(Box<dyn OwnedDataAll>),
+}
 
-pub trait Renderable {
-    fn render(&self, gl : &glow::Context, delta : &time::Duration, since_0 : &time::Duration);
+impl GlAppOwnedData {
+    fn as_renderable(&mut self) -> Option<&mut dyn Updateable> {
+        match self {
+            Self::Updateable(x) => Some(x.as_mut()),
+            Self::All(x) => Some(x.as_mut()),
+            _ => None,
+        }
+    }
+    fn as_input_listener(&mut self) -> Option<&mut dyn InputListener> {
+        match self {
+            Self::InputListener(x) => Some(x.as_mut()),
+            Self::All(x) => Some(x.as_mut()),
+            _ => None,
+        }
+    }
+}
+pub trait OwnedDataAll: Updateable + InputListener {}
+impl<T: InputListener + Updateable> OwnedDataAll for T {}
+
+pub trait InputListener {
+    fn on_input(&mut self, event: &winit::event::WindowEvent);
+}
+
+pub trait Updateable {
+    /// can also render inside this function
+    fn on_tick(&mut self, gl: &glow::Context, delta: &time::Duration, since_0: &time::Duration);
 }
 
 pub struct GlApp {
     pub gl: glow::Context,
-    pub renderable : Vec<Box<dyn Renderable>>,
-    t_0 : time::SystemTime,
+    t_0: time::SystemTime,
     t_last_render: time::SystemTime,
 
-    input_listener : Rc<RefCell<HashMap<usize, Box<dyn Fn(&WindowEvent)>>>>,
-    input_id : usize
+    renderable_ids: Vec<usize>,
+    input_listener_ids: Vec<usize>,
+
+    owned_data: HashMap<usize, GlAppOwnedData>,
+    owned_data_counter: usize,
 }
 
 impl GlApp {
     pub fn new(gl: glow::Context) -> Self {
-        let basic_shader = Rc::new(BasicShader::new(&gl));
-        let basic_mesh = Mesh::new(&gl, basic_shader);
-
         let renderer = Self {
             gl,
             t_last_render: time::SystemTime::now(),
             t_0: time::SystemTime::now(),
-            renderable: vec![Box::new(basic_mesh)],
-            input_listener: Rc::new(RefCell::new(HashMap::new())),
-            input_id : 0,
+            renderable_ids: Vec::new(),
+            input_listener_ids: Vec::new(),
+            owned_data: HashMap::new(),
+            owned_data_counter: 0,
         };
-        
+
         renderer
     }
-    pub fn add_input_listener(&mut self, listener : Box<dyn Fn(&WindowEvent)>) -> Box<impl FnOnce() + use<>> {
-        let curr_id = self.input_id; 
-        self.input_listener.borrow_mut().insert(curr_id, listener);
-        
-        self.input_id+=1;
 
-        let listener_list = self.input_listener.clone();
-        Box::new(move || {listener_list.borrow_mut().remove(&curr_id);})
+    pub fn take(&mut self, data: GlAppOwnedData) {
+        let curr_data_counter = self.owned_data_counter;
+        match &data {
+            GlAppOwnedData::InputListener(_) => {
+                self.input_listener_ids.push(curr_data_counter);
+                self.owned_data.insert(curr_data_counter, data);
+            }
+            GlAppOwnedData::Updateable(_) => {
+                self.renderable_ids.push(curr_data_counter);
+                self.owned_data.insert(curr_data_counter, data);
+            }
+            GlAppOwnedData::All(_) => {
+                self.renderable_ids.push(curr_data_counter);
+                self.input_listener_ids.push(curr_data_counter);
+                self.owned_data.insert(curr_data_counter, data);
+            }
+        }
+        self.owned_data_counter += 1;
     }
 
     pub fn render(&mut self) {
@@ -53,8 +91,14 @@ impl GlApp {
             self.gl.clear(COLOR_BUFFER_BIT);
         }
 
-        for r in &self.renderable {
-            r.render(&self.gl, &delta, &self.elapsed());
+        for r in &self.renderable_ids {
+            let elapsed = self.elapsed();
+            self.owned_data
+                .get_mut(r)
+                .expect("renderable ids should always updated to match existing item")
+                .as_renderable()
+                .expect("renderable ids should always fetch renderable from owned data")
+                .on_tick(&self.gl, &delta, &elapsed);
         }
     }
 
@@ -65,18 +109,29 @@ impl GlApp {
         event: winit::event::WindowEvent,
     ) {
         match &event {
-            WindowEvent::CloseRequested => {
+            winit::event::WindowEvent::CloseRequested => {
                 event_loop.exit();
-            },
-            WindowEvent::KeyboardInput { device_id : _, event, is_synthetic : _ } => {
-                if event.logical_key == Key::Named(winit::keyboard::NamedKey::Escape) {
+            }
+            winit::event::WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => {
+                if event.logical_key
+                    == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
+                {
                     event_loop.exit();
                 }
             }
             _ => (),
         }
-        for listener in self.input_listener.borrow_mut().values() {
-            (listener)(&event);
+        for r in &self.input_listener_ids {
+            self.owned_data
+                .get_mut(r)
+                .expect("input listener ids should always updated to match existing item")
+                .as_input_listener()
+                .expect("input listener ids should always fetch input listener from owned data")
+                .on_input(&event);
         }
     }
 

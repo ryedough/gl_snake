@@ -3,7 +3,7 @@ use std::{mem, rc::Rc};
 
 use glow::{HasContext, NativeBuffer, NativeVertexArray};
 
-use crate::{gl_app::Renderable, shader::Shader};
+use crate::{gl_app::Updateable, shader::Shader};
 
 pub struct Mesh<T : Shader> {
     shader : Rc<T>,
@@ -64,8 +64,8 @@ impl<T:Shader> Mesh<T> {
     }
 }
 
-impl<T:Shader> Renderable for Mesh<T> {
-    fn render(&self, gl : &glow::Context, _ : &time::Duration, _ : &time::Duration) {
+impl<T:Shader> Updateable for Mesh<T> {
+    fn on_tick(&mut self, gl : &glow::Context, _ : &time::Duration, _ : &time::Duration) {
         self.shader.use_shader(gl);
 
         unsafe {

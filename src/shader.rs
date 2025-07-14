@@ -4,6 +4,10 @@ mod basic;
 
 pub use basic::BasicShader;
 
+pub trait Shader {
+    fn use_shader(&self, gl: &glow::Context);
+}
+
 fn gen_program(gl: &glow::Context, vs_str :&str, fs_str: &str) -> Result<NativeProgram, String> {
     let shader_srcs = [
         (glow::VERTEX_SHADER, &vs_str),

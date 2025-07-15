@@ -2,53 +2,15 @@ use std::{collections::HashMap, time};
 
 use glow::{COLOR_BUFFER_BIT, HasContext};
 
-pub enum GlAppOwnedData {
-    Updateable(Box<dyn Updateable>),
-    InputListener(Box<dyn InputListener>),
-    UpdateableInputListener(Box<dyn UpdateableInputListener>),
-}
+mod app_bootstraper;
+mod app_owned_data;
+mod registered_collider;
 
-impl GlAppOwnedData {
-    fn as_updateable(&mut self) -> Option<&mut dyn Updateable> {
-        match self {
-            Self::Updateable(x) => Some(x.as_mut()),
-            Self::UpdateableInputListener(x) => Some(x.as_mut()),
-            _ => None,
-        }
-    }
-    fn as_input_listener(&mut self) -> Option<&mut dyn InputListener> {
-        match self {
-            Self::InputListener(x) => Some(x.as_mut()),
-            Self::UpdateableInputListener(x) => Some(x.as_mut()),
-            _ => None,
-        }
-    }
+pub use app_bootstraper::AppBootstraper;
+pub use app_owned_data::{AppOwnedData, InputListener, Updateable};
+pub use registered_collider::RegisteredCollider;
 
-    pub fn from_updateable(data : impl Updateable + 'static) -> Self {
-        Self::Updateable(Box::new(data))
-    }
-    pub fn from_input_listener(data : impl InputListener + 'static) -> Self {
-        Self::InputListener(Box::new(data))
-    }
-    pub fn from_updateable_input_listener(data : impl UpdateableInputListener + 'static) -> Self {
-        Self::UpdateableInputListener(Box::new(data))
-    }
-}
-
-pub trait UpdateableInputListener: Updateable + InputListener {}
-impl<T: InputListener + Updateable> UpdateableInputListener for T {}
-
-pub trait InputListener {
-    fn on_input(&mut self, event: &winit::event::WindowEvent);
-}
-
-pub trait Updateable {
-    /// can also render inside this function
-    fn on_tick(&mut self, gl: &glow::Context, delta: &time::Duration, since_0: &time::Duration);
-    fn on_setup(&mut self, gl: &glow::Context);
-}
-
-pub struct GlApp {
+pub struct App {
     pub gl: glow::Context,
     t_0: time::SystemTime,
     t_last_render: time::SystemTime,
@@ -56,11 +18,11 @@ pub struct GlApp {
     updateable_ids: Vec<usize>,
     input_listener_ids: Vec<usize>,
 
-    owned_data: HashMap<usize, GlAppOwnedData>,
+    owned_data: HashMap<usize, AppOwnedData>,
     owned_data_counter: usize,
 }
 
-impl GlApp {
+impl App {
     pub fn new(gl: glow::Context) -> Self {
         let mut _self = Self {
             gl,
@@ -86,18 +48,19 @@ impl GlApp {
         };
     }
 
-    pub fn take(&mut self, data: GlAppOwnedData) {
+    // become owner of taken data
+    pub fn take(&mut self, data: AppOwnedData) {
         let curr_data_counter = self.owned_data_counter;
         match &data {
-            GlAppOwnedData::InputListener(_) => {
+            AppOwnedData::InputListener(_) => {
                 self.input_listener_ids.push(curr_data_counter);
                 self.owned_data.insert(curr_data_counter, data);
             }
-            GlAppOwnedData::Updateable(_) => {
+            AppOwnedData::Updateable(_) => {
                 self.updateable_ids.push(curr_data_counter);
                 self.owned_data.insert(curr_data_counter, data);
             }
-            GlAppOwnedData::UpdateableInputListener(_) => {
+            AppOwnedData::UpdateableInputListener(_) => {
                 self.updateable_ids.push(curr_data_counter);
                 self.input_listener_ids.push(curr_data_counter);
                 self.owned_data.insert(curr_data_counter, data);
@@ -131,23 +94,6 @@ impl GlApp {
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        match &event {
-            winit::event::WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            winit::event::WindowEvent::KeyboardInput {
-                device_id: _,
-                event,
-                is_synthetic: _,
-            } => {
-                if event.logical_key
-                    == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
-                {
-                    event_loop.exit();
-                }
-            }
-            _ => (),
-        }
         for r in &self.input_listener_ids {
             self.owned_data
                 .get_mut(r)

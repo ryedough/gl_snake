@@ -2,7 +2,7 @@ use std::{cell::RefCell, cmp, rc::Rc};
 
 use winit::{event::WindowEvent, keyboard::Key};
 
-use crate::{gl_app::{GlApp, InputListener, Updateable}, mesh, shader::{BasicShader, Shader}};
+use crate::{app::{App, InputListener, Updateable}, mesh, shader::{BasicShader, Shader}};
 
 const SPEED : f32 = 0.3;
 
@@ -26,7 +26,7 @@ pub struct Snek {
 }
 
 impl Snek {
-    pub fn new(app : &mut GlApp, shader : Rc<BasicShader>)->Self {
+    pub fn new(app : &mut App, shader : Rc<BasicShader>)->Self {
         Snek {
             mesh: mesh::UnitRect::new(&app.gl, shader.as_ref()),
             position : Position { x: 0.5, y: 0.5 },

@@ -2,7 +2,7 @@ use std::{cell::RefCell, cmp, rc::Rc};
 
 use winit::{event::WindowEvent, keyboard::Key};
 
-use crate::{app::{App, InputListener, Updateable}, mesh, shader::{BasicShader, Shader}};
+use crate::{app::{app_owned_data::{InputListener, Updateable}, App}, mesh, shader::{BasicShader, Shader}};
 
 const SPEED : f32 = 0.3;
 

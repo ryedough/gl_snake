@@ -109,7 +109,7 @@ impl ApplicationHandler for AppBootstraper {
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        match event {
+        match &event {
             WindowEvent::Resized(size) if size.width != 0 && size.height != 0 => {
                 if let Some(AppState {
                     window: _,
@@ -138,8 +138,9 @@ impl ApplicationHandler for AppBootstraper {
                     event_loop.exit();
                 }
             }
-            event => {self.app.as_mut().map(|app|app.window_event(event_loop, window_id, event));},
+            _=> {},
         }
+        self.app.as_mut().map(|app|app.window_event(event_loop, window_id, event));
     }
     fn exiting(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         //clear window

@@ -1,22 +1,21 @@
 use std::rc::Rc;
 
-use crate::{gl_app::{GlApp, GlAppOwnedData}, gl_bootstraper::GlBootstraper, object::Snek, shader::BasicShader};
+use crate::{app::{App, AppBootstraper, AppOwnedData}, object::Snek, shader::BasicShader};
 
 mod shader;
 mod mesh;
 mod object;
-mod gl_bootstraper;
-mod gl_app;
+mod app;
 
 fn main() {
-    let gl_app = GlBootstraper::new(on_app_init);
+    let gl_app = AppBootstraper::new(on_app_init);
     gl_app.exec().unwrap();
 }
 
-fn on_app_init(app : &mut GlApp) {
+fn on_app_init(app : &mut App) {
     let basic = Rc::new(BasicShader::new(&app.gl));
     { 
         let square = Snek::new(app, basic.clone());
-        app.take(GlAppOwnedData::from_updateable_input_listener(square));
+        app.take(AppOwnedData::from_updt_input(square));
     }
 }

@@ -7,7 +7,7 @@ use winit::{
     application::ApplicationHandler, dpi::{LogicalSize, PhysicalSize}, error::EventLoopError, event::WindowEvent, event_loop::{ControlFlow, EventLoop}, keyboard::Key, raw_window_handle::HasWindowHandle, window::{Window, WindowAttributes}
 };
 
-use crate::gl_app::GlApp;
+use crate::app::App;
 
 enum GlDisplayCreationState {
     Unbuilt(DisplayBuilder),
@@ -19,18 +19,18 @@ struct AppState {
     gl_surface: Surface<WindowSurface>,
 }
 
-pub struct GlBootstraper {
+pub struct AppBootstraper {
     state: Option<AppState>,
     gl_context: Option<PossiblyCurrentContext>,
     gl_display: GlDisplayCreationState,
     template: ConfigTemplateBuilder,
-    app : Option<GlApp>,
-    on_app_init : fn(&mut GlApp),
+    app : Option<App>,
+    on_app_init : fn(&mut App),
 }
 
 // responsible for creating & managing window & gl context
-impl GlBootstraper {
-    pub fn new(on_app_init : fn(&mut GlApp)) -> Self {
+impl AppBootstraper {
+    pub fn new(on_app_init : fn(&mut App)) -> Self {
         Self {
             state: None,
             gl_context: None,
@@ -49,10 +49,11 @@ impl GlBootstraper {
     } 
 }
 
-impl ApplicationHandler for GlBootstraper {
+impl ApplicationHandler for AppBootstraper {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let (window, gl_config) = match &self.gl_display {
             GlDisplayCreationState::Unbuilt(display_builder) => {
+                //first time resumed() called
                 let (window, config) = display_builder
                     .clone()
                     .build(event_loop, self.template.clone(), gl_config_picker)
@@ -88,8 +89,9 @@ impl ApplicationHandler for GlBootstraper {
         gl_context.make_current(&gl_surface).unwrap();
 
         self.app.get_or_insert_with(|| {
+            //first time resumed() called
             let gl = unsafe { glow::Context::from_loader_function_cstr(|s|self.gl_context.as_ref().unwrap().display().get_proc_address(s)) };
-            let mut renderer = GlApp::new(gl);
+            let mut renderer = App::new(gl);
             (self.on_app_init)(&mut renderer);
             renderer.after_on_app_init();
             renderer
@@ -120,6 +122,20 @@ impl ApplicationHandler for GlBootstraper {
                         NonZero::new(size.width).unwrap(),
                         NonZero::new(size.height).unwrap(),
                     );
+                }
+            },
+            winit::event::WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            winit::event::WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => {
+                if event.logical_key
+                    == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
+                {
+                    event_loop.exit();
                 }
             }
             event => {self.app.as_mut().map(|app|app.window_event(event_loop, window_id, event));},

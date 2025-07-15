@@ -4,7 +4,7 @@ use glutin::{
 };
 use glutin_winit::{DisplayBuilder, GlWindow};
 use winit::{
-    application::ApplicationHandler, error::EventLoopError, event::WindowEvent, event_loop::{ControlFlow, EventLoop}, keyboard::Key, raw_window_handle::HasWindowHandle, window::{Window, WindowAttributes}
+    application::ApplicationHandler, dpi::{LogicalSize, PhysicalSize}, error::EventLoopError, event::WindowEvent, event_loop::{ControlFlow, EventLoop}, keyboard::Key, raw_window_handle::HasWindowHandle, window::{Window, WindowAttributes}
 };
 
 use crate::gl_app::GlApp;
@@ -28,15 +28,15 @@ pub struct GlBootstraper {
     on_app_init : fn(&mut GlApp),
 }
 
-// responsible for creating window and gl context
+// responsible for creating & managing window & gl context
 impl GlBootstraper {
-    pub fn new(template: ConfigTemplateBuilder, on_app_init : fn(&mut GlApp)) -> Self {
+    pub fn new(on_app_init : fn(&mut GlApp)) -> Self {
         Self {
             state: None,
             gl_context: None,
             app : None,
             gl_display: GlDisplayCreationState::Unbuilt(DisplayBuilder::new().with_window_attributes(Some(window_attributes()))),
-            template: template,
+            template: ConfigTemplateBuilder::default(),
             on_app_init
         }
     }
@@ -91,6 +91,7 @@ impl ApplicationHandler for GlBootstraper {
             let gl = unsafe { glow::Context::from_loader_function_cstr(|s|self.gl_context.as_ref().unwrap().display().get_proc_address(s)) };
             let mut renderer = GlApp::new(gl);
             (self.on_app_init)(&mut renderer);
+            renderer.after_on_app_init();
             renderer
         });
 
@@ -169,6 +170,8 @@ fn window_attributes() -> WindowAttributes {
     Window::default_attributes()
         .with_transparent(true)
         .with_title("GL_Snek")
+        .with_resizable(false)
+        .with_inner_size(PhysicalSize::new(400, 400))
 }
 
 fn create_gl_context(window: &Window, gl_config: &Config) -> NotCurrentContext {

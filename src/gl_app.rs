@@ -5,27 +5,38 @@ use glow::{COLOR_BUFFER_BIT, HasContext};
 pub enum GlAppOwnedData {
     Updateable(Box<dyn Updateable>),
     InputListener(Box<dyn InputListener>),
-    All(Box<dyn OwnedDataAll>),
+    UpdateableInputListener(Box<dyn UpdateableInputListener>),
 }
 
 impl GlAppOwnedData {
-    fn as_renderable(&mut self) -> Option<&mut dyn Updateable> {
+    fn as_updateable(&mut self) -> Option<&mut dyn Updateable> {
         match self {
             Self::Updateable(x) => Some(x.as_mut()),
-            Self::All(x) => Some(x.as_mut()),
+            Self::UpdateableInputListener(x) => Some(x.as_mut()),
             _ => None,
         }
     }
     fn as_input_listener(&mut self) -> Option<&mut dyn InputListener> {
         match self {
             Self::InputListener(x) => Some(x.as_mut()),
-            Self::All(x) => Some(x.as_mut()),
+            Self::UpdateableInputListener(x) => Some(x.as_mut()),
             _ => None,
         }
     }
+
+    pub fn from_updateable(data : impl Updateable + 'static) -> Self {
+        Self::Updateable(Box::new(data))
+    }
+    pub fn from_input_listener(data : impl InputListener + 'static) -> Self {
+        Self::InputListener(Box::new(data))
+    }
+    pub fn from_updateable_input_listener(data : impl UpdateableInputListener + 'static) -> Self {
+        Self::UpdateableInputListener(Box::new(data))
+    }
 }
-pub trait OwnedDataAll: Updateable + InputListener {}
-impl<T: InputListener + Updateable> OwnedDataAll for T {}
+
+pub trait UpdateableInputListener: Updateable + InputListener {}
+impl<T: InputListener + Updateable> UpdateableInputListener for T {}
 
 pub trait InputListener {
     fn on_input(&mut self, event: &winit::event::WindowEvent);
@@ -34,6 +45,7 @@ pub trait InputListener {
 pub trait Updateable {
     /// can also render inside this function
     fn on_tick(&mut self, gl: &glow::Context, delta: &time::Duration, since_0: &time::Duration);
+    fn on_setup(&mut self, gl: &glow::Context);
 }
 
 pub struct GlApp {
@@ -41,7 +53,7 @@ pub struct GlApp {
     t_0: time::SystemTime,
     t_last_render: time::SystemTime,
 
-    renderable_ids: Vec<usize>,
+    updateable_ids: Vec<usize>,
     input_listener_ids: Vec<usize>,
 
     owned_data: HashMap<usize, GlAppOwnedData>,
@@ -50,17 +62,28 @@ pub struct GlApp {
 
 impl GlApp {
     pub fn new(gl: glow::Context) -> Self {
-        let renderer = Self {
+        let mut _self = Self {
             gl,
             t_last_render: time::SystemTime::now(),
             t_0: time::SystemTime::now(),
-            renderable_ids: Vec::new(),
+            updateable_ids: Vec::new(),
             input_listener_ids: Vec::new(),
             owned_data: HashMap::new(),
             owned_data_counter: 0,
         };
 
-        renderer
+        _self
+    }
+
+    pub fn after_on_app_init(&mut self) {
+        for idx in &mut self.updateable_ids {
+            self.owned_data
+                .get_mut(&idx)
+                .expect("updateable ids should always updated to match existing item")
+                .as_updateable()
+                .expect("updateable ids should always fetch updateable from owned data")
+                .on_setup(&self.gl);
+        };
     }
 
     pub fn take(&mut self, data: GlAppOwnedData) {
@@ -71,11 +94,11 @@ impl GlApp {
                 self.owned_data.insert(curr_data_counter, data);
             }
             GlAppOwnedData::Updateable(_) => {
-                self.renderable_ids.push(curr_data_counter);
+                self.updateable_ids.push(curr_data_counter);
                 self.owned_data.insert(curr_data_counter, data);
             }
-            GlAppOwnedData::All(_) => {
-                self.renderable_ids.push(curr_data_counter);
+            GlAppOwnedData::UpdateableInputListener(_) => {
+                self.updateable_ids.push(curr_data_counter);
                 self.input_listener_ids.push(curr_data_counter);
                 self.owned_data.insert(curr_data_counter, data);
             }
@@ -91,13 +114,13 @@ impl GlApp {
             self.gl.clear(COLOR_BUFFER_BIT);
         }
 
-        for r in &self.renderable_ids {
+        for r in &self.updateable_ids {
             let elapsed = self.elapsed();
             self.owned_data
                 .get_mut(r)
-                .expect("renderable ids should always updated to match existing item")
-                .as_renderable()
-                .expect("renderable ids should always fetch renderable from owned data")
+                .expect("updateable ids should always updated to match existing item")
+                .as_updateable()
+                .expect("updateable ids should always fetch updateable from owned data")
                 .on_tick(&self.gl, &delta, &elapsed);
         }
     }

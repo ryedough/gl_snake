@@ -1,54 +1,130 @@
 use core::time;
+use std::any::Any;
 
 use crate::app::RegisteredCollider;
 
-pub enum AppOwnedData {
-    Updateable(Box<dyn Updateable>),
-    InputListener(Box<dyn InputListener>),
-    UpdateableInputListener(Box<dyn UpdateableInputListener>),
-}
+pub struct AppOwnedData(Box<dyn Any>);
 
 impl AppOwnedData {
-    pub fn as_updateable(&mut self) -> Option<&mut dyn Updateable> {
-        match self {
-            Self::Updateable(x) => Some(x.as_mut()),
-            Self::UpdateableInputListener(x) => Some(x.as_mut()),
-            _ => None,
+    /// # Warning
+    /// data must be trait object of type : Updateable, Collider, InputListener, or permutaition of those <br/>
+    /// if object implement more than one trait use the permutation version, so it will be registered as both trait <br/>
+    /// eg: `Updateable + Collider` use `CldrUpdt` 
+    pub fn from<T :?Sized + 'static>(data : Box<T>) -> Self {
+        AppOwnedData(Box::new(data))
+    }
+    pub fn is_updateable(&self) -> bool {
+        self.is::<dyn Updateable>()
+            || self.is::<dyn UpdtInpLstr>()
+            || self.is::<dyn CldrUpdt>()
+            || self.is::<dyn CldrUpdtInpLstr>()
+    }
+    pub fn is_collider(&self) -> bool {
+        self.is::<dyn Collider>()
+            || self.is::<dyn CldrInpLstr>()
+            || self.is::<dyn CldrUpdt>()
+            || self.is::<dyn CldrUpdtInpLstr>()
+    }
+    pub fn is_input_listener(&self) -> bool {
+        self.is::<dyn InputListener>()
+            || self.is::<dyn CldrInpLstr>()
+            || self.is::<dyn UpdtInpLstr>()
+            || self.is::<dyn CldrUpdtInpLstr>()
+    }
+    pub fn as_updateable(&mut self) -> Option<&mut dyn Updateable>{
+        //TODO: make these macro variadic
+        macro_rules! try_downcast {
+            ($ty:ty) => {
+                if self.is::<$ty>(){
+                    let data = self.as_mut::<$ty>()?; 
+                    return Some(data.as_mut());
+                }
+            }
         }
+        
+        try_downcast!(dyn Updateable);
+        try_downcast!(dyn UpdtInpLstr);
+        try_downcast!(dyn CldrUpdt);
+        try_downcast!(dyn CldrUpdtInpLstr);
+        return None
     }
-    pub fn as_input_listener(&mut self) -> Option<&mut dyn InputListener> {
-        match self {
-            Self::InputListener(x) => Some(x.as_mut()),
-            Self::UpdateableInputListener(x) => Some(x.as_mut()),
-            _ => None,
+    pub fn as_collider(&mut self) -> Option<&mut dyn Collider>{
+        macro_rules! try_downcast {
+            ($ty:ty) => {
+                if self.is::<$ty>(){
+                    let data = self.as_mut::<$ty>()?; 
+                    return Some(data.as_mut());
+                }
+            }
         }
+        
+        try_downcast!(dyn Collider);
+        try_downcast!(dyn CldrInpLstr);
+        try_downcast!(dyn CldrUpdt);
+        try_downcast!(dyn CldrUpdtInpLstr);
+        return None
     }
-
-    pub fn from_updateable(data : impl Updateable + 'static) -> Self {
-        Self::Updateable(Box::new(data))
+    pub fn as_input_listener(&mut self) -> Option<&mut dyn InputListener>{
+        macro_rules! try_downcast {
+            ($ty:ty) => {
+                if self.is::<$ty>(){
+                    let data = self.as_mut::<$ty>()?; 
+                    return Some(data.as_mut());
+                }
+            }
+        }
+        
+        try_downcast!(dyn InputListener);
+        try_downcast!(dyn CldrInpLstr);
+        try_downcast!(dyn UpdtInpLstr);
+        try_downcast!(dyn CldrUpdtInpLstr);
+        return None
     }
-    pub fn from_input_listener(data : impl InputListener + 'static) -> Self {
-        Self::InputListener(Box::new(data))
+    fn is<T: ?Sized + 'static>(&self) -> bool {
+        self.0.is::<Box<T>>()
     }
-    pub fn from_updt_input(data : impl UpdateableInputListener + 'static) -> Self {
-        Self::UpdateableInputListener(Box::new(data))
+    pub fn as_mut<T: ?Sized + 'static>(&mut self) -> Option<&mut Box<T>> {
+        self.0.downcast_mut::<Box<T>>()
     }
 }
 
-pub trait UpdateableInputListener: Updateable + InputListener {}
-impl<T: InputListener + Updateable> UpdateableInputListener for T {}
-
-pub trait InputListener {
+pub trait InputListener
+where
+    Self: 'static,
+{
     fn on_input(&mut self, event: &winit::event::WindowEvent);
 }
 
-pub trait Updateable {
-    /// can also render inside this function
+pub trait Updateable
+where
+    Self: 'static,
+{
+    /// Can also render inside this function
     fn on_tick(&mut self, gl: &glow::Context, delta: &time::Duration, since_0: &time::Duration);
     fn on_setup(&mut self, gl: &glow::Context);
 }
 
-pub trait Collider {
-    fn on_collide(&mut self, collider : &impl Collider);
+pub trait Collider
+where
+    Self: 'static,
+{
+    fn on_collide(&mut self, other: &dyn Collider);
     fn identifier(&self) -> RegisteredCollider;
+    fn check_collision(&self, other: &dyn Collider);
 }
+
+// TODO: using macro to create these shits
+// 1st degree Permutation of the basic traits ---------------------------------------------
+pub trait UpdtInpLstr: Updateable + InputListener {}
+impl<T: Updateable + InputListener> UpdtInpLstr for T {}
+
+pub trait CldrUpdt : Collider + Updateable {}
+impl<T: Collider + Updateable> CldrUpdt for T {}
+
+pub trait CldrInpLstr : Collider + InputListener {}
+impl<T: Collider + InputListener> CldrInpLstr for T {}
+
+// 2nd degree permutation -----------------------------------------------------------
+pub trait CldrUpdtInpLstr : Collider + Updateable + InputListener {}
+
+impl<T: Collider + Updateable + InputListener> CldrUpdtInpLstr for T {}

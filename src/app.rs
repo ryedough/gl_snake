@@ -3,12 +3,13 @@ use std::{collections::HashMap, time};
 use glow::{COLOR_BUFFER_BIT, HasContext};
 
 mod app_bootstraper;
-mod app_owned_data;
+pub mod app_owned_data;
 mod registered_collider;
 
 pub use app_bootstraper::AppBootstraper;
-pub use app_owned_data::{AppOwnedData, InputListener, Updateable};
 pub use registered_collider::RegisteredCollider;
+
+use crate::app::app_owned_data::AppOwnedData;
 
 pub struct App {
     pub gl: glow::Context,
@@ -17,6 +18,7 @@ pub struct App {
 
     updateable_ids: Vec<usize>,
     input_listener_ids: Vec<usize>,
+    collider_ids: Vec<usize>,
 
     owned_data: HashMap<usize, AppOwnedData>,
     owned_data_counter: usize,
@@ -30,6 +32,7 @@ impl App {
             t_0: time::SystemTime::now(),
             updateable_ids: Vec::new(),
             input_listener_ids: Vec::new(),
+            collider_ids: Vec::new(),
             owned_data: HashMap::new(),
             owned_data_counter: 0,
         };
@@ -44,28 +47,27 @@ impl App {
                 .expect("updateable ids should always updated to match existing item")
                 .as_updateable()
                 .expect("updateable ids should always fetch updateable from owned data")
-                .on_setup(&self.gl);
-        };
+                .on_setup(&self.gl);       
+        }
     }
 
     // become owner of taken data
     pub fn take(&mut self, data: AppOwnedData) {
         let curr_data_counter = self.owned_data_counter;
-        match &data {
-            AppOwnedData::InputListener(_) => {
-                self.input_listener_ids.push(curr_data_counter);
-                self.owned_data.insert(curr_data_counter, data);
-            }
-            AppOwnedData::Updateable(_) => {
-                self.updateable_ids.push(curr_data_counter);
-                self.owned_data.insert(curr_data_counter, data);
-            }
-            AppOwnedData::UpdateableInputListener(_) => {
-                self.updateable_ids.push(curr_data_counter);
-                self.input_listener_ids.push(curr_data_counter);
-                self.owned_data.insert(curr_data_counter, data);
-            }
+
+        println!("is updateable : {}, is_collider : {}, is_input_listener : {}", data.is_updateable(), data.is_collider(), data.is_input_listener());
+
+        if data.is_updateable() {
+            self.updateable_ids.push(curr_data_counter);
         }
+        if data.is_collider() {
+            self.collider_ids.push(curr_data_counter);
+        }
+        if data.is_input_listener() {
+            self.input_listener_ids.push(curr_data_counter);
+        }
+
+        self.owned_data.insert(curr_data_counter, data);
         self.owned_data_counter += 1;
     }
 

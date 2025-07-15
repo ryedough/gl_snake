@@ -6,6 +6,7 @@ pub use basic::BasicShader;
 
 pub trait Shader {
     fn use_shader(&self, gl: &glow::Context);
+    fn get_attribute(&self, key : &str)->Option<u32>;
 }
 
 fn gen_program(gl: &glow::Context, vs_str :&str, fs_str: &str) -> Result<NativeProgram, String> {

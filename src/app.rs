@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time};
+use std::{collections::HashMap, time::{self, Duration}};
 
 use glow::{COLOR_BUFFER_BIT, HasContext};
 
@@ -22,6 +22,11 @@ pub struct App {
 
     owned_data: HashMap<usize, AppOwnedData>,
     owned_data_counter: usize,
+
+    fps : Vec<f32>,
+    record_fps : bool,
+
+    render_count : usize 
 }
 
 impl App {
@@ -35,6 +40,9 @@ impl App {
             collider_ids: Vec::new(),
             owned_data: HashMap::new(),
             owned_data_counter: 0,
+            fps: Vec::with_capacity(100),
+            record_fps : true,
+            render_count : 0,
         };
 
         _self
@@ -72,7 +80,16 @@ impl App {
     }
 
     pub fn render(&mut self) {
+        self.render_count +=1;
         let delta = self.calc_delta();
+
+        if self.record_fps {
+            let fps = Duration::from_secs(1).div_duration_f32(delta);
+            if self.render_count % 500 == 0 {
+                println!("sampled : {fps} fps");
+                self.fps.push(fps);
+            }
+        }
 
         unsafe {
             self.gl.clear_color(0., 0.5, 0.5, 1.);
@@ -88,6 +105,11 @@ impl App {
                 .expect("updateable ids should always fetch updateable from owned data")
                 .on_tick(&self.gl, &delta, &elapsed);
         }
+    }
+
+    pub fn on_exit(&mut self) {
+        let fps_len = self.fps.len();
+        println!("fps_avg over {} sample : {} fps", fps_len, self.fps.iter().sum::<f32>() / fps_len as f32)
     }
 
     pub fn window_event(

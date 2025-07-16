@@ -1,8 +1,8 @@
 use glow::{HasContext, NativeProgram};
 
-mod basic;
+mod snek;
 
-pub use basic::BasicShader;
+pub use snek::SnekShader;
 
 pub trait Shader {
     fn use_shader(&self, gl: &glow::Context);

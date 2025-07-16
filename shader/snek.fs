@@ -23,6 +23,7 @@ uniform MoveKeypoint[MAX_KEYPOINTS] uKeypoints;
 uniform uint uKeypointLen;
 
 bool pointInRadius(vec2 pos, vec2 center);
+bool pointInBox(vec2 pos, vec2 boxStart, vec2 boxEnd);
 
 void main() {
     vec2 frag_pos = vec2(gl_FragCoord.x/ SCREEN_W, gl_FragCoord.y / SCREEN_H);
@@ -46,6 +47,19 @@ void main() {
             uint nextIdx = i-uint(1);
             nextDst = uKeypoints[nextIdx].dstHead - current.dstHead;
             remainLength -= nextDst;
+        } else {
+            // this is tail
+            vec2 tailPos = vec2(0,0);
+            switch(current.from){
+                case UP : tailPos = vec2(current.at.x,current.at.y - nextDst); break;
+                case RIGHT : tailPos = vec2(current.at.x - nextDst,current.at.y); break;
+                case DOWN : tailPos = vec2(current.at.x,current.at.y + nextDst); break;
+                case LEFT : tailPos = vec2(current.at.x + nextDst,current.at.y); break;
+            }
+            if(pointInRadius(frag_pos, tailPos)){
+                gl_FragColor = vec4(1., 1., 1., 1.0);
+                return;
+            }
         };
 
         if(nextDst == 0){
@@ -54,36 +68,36 @@ void main() {
         }
 
         switch(current.from){
-            case UP : 
-                for(float i = 0; i < nextDst; i+=0.02){
-                    if(pointInRadius(frag_pos, vec2(current.at.x, current.at.y - i))){
+            case UP :
+                if(pointInBox(frag_pos, 
+                    vec2(current.at.x - uCircRadius, current.at.y - nextDst), 
+                    vec2(current.at.x + uCircRadius, current.at.y))) {
                         gl_FragColor = vec4(1., 1., 1., 1.0);
                         return;
-                    }
                 }
                 break;
             case RIGHT : 
-                for(float i = 0; i < nextDst; i+=0.02){
-                    if(pointInRadius(frag_pos, vec2(current.at.x - i, current.at.y))){
+                if(pointInBox(frag_pos, 
+                    vec2(current.at.x - nextDst, current.at.y - uCircRadius), 
+                    vec2(current.at.x, current.at.y + uCircRadius))) {
                         gl_FragColor = vec4(1., 1., 1., 1.0);
                         return;
-                    }
                 }
                 break;
             case DOWN : 
-                for(float i = 0; i < nextDst; i+=0.02){
-                    if(pointInRadius(frag_pos, vec2(current.at.x, current.at.y + i))){
+                if(pointInBox(frag_pos, 
+                    vec2(current.at.x - uCircRadius, current.at.y), 
+                    vec2(current.at.x + uCircRadius, current.at.y + nextDst))) {
                         gl_FragColor = vec4(1., 1., 1., 1.0);
                         return;
-                    }
                 }
                 break;
             case LEFT : 
-                for(float i = 0; i < nextDst; i+=0.02){
-                    if(pointInRadius(frag_pos, vec2(current.at.x + i, current.at.y))){
+                if(pointInBox(frag_pos, 
+                    vec2(current.at.x, current.at.y - uCircRadius), 
+                    vec2(current.at.x + nextDst, current.at.y + uCircRadius))) {
                         gl_FragColor = vec4(1., 1., 1., 1.0);
                         return;
-                    }
                 }
                 break;
         }
@@ -93,4 +107,14 @@ void main() {
 
 bool pointInRadius(vec2 pos, vec2 center) {
     return (length(pos - center) < uCircRadius);
+}
+
+// box start must be on bottom left, box's end must be on top right
+// e.g :
+// boxStart = (0.1, 0.1)
+// boxEnd = (0.5, 0.5)
+bool pointInBox(vec2 pos, vec2 boxStart, vec2 boxEnd) {
+    return 
+        (pos.x > boxStart.x && pos.x < boxEnd.x) &&
+        (pos.y > boxStart.y && pos.y < boxEnd.y);
 }

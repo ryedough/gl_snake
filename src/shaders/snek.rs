@@ -1,4 +1,4 @@
-use crate::{object::snek::DirKeypoint, shader::{gen_program, Shader}};
+use crate::{objects::snek::DirKeypoint, shaders::{gen_program, Shader}};
 use glow::{HasContext, NativeProgram, NativeUniformLocation};
 use std::{collections::HashMap, fs};
 

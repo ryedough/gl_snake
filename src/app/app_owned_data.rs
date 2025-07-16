@@ -5,12 +5,22 @@ use crate::app::RegisteredCollider;
 
 pub struct AppOwnedData(Box<dyn Any>);
 
+trait AppOwnedDataTrait{}
+impl AppOwnedDataTrait for Box<dyn Updateable> {}
+impl AppOwnedDataTrait for Box<dyn Collider> {}
+impl AppOwnedDataTrait for Box<dyn InputListener> {}
+impl AppOwnedDataTrait for Box<dyn UpdtInpLstr> {}
+impl AppOwnedDataTrait for Box<dyn CldrUpdt> {}
+impl AppOwnedDataTrait for Box<dyn CldrInpLstr> {}
+impl AppOwnedDataTrait for Box<dyn CldrUpdtInpLstr> {}
+
 impl AppOwnedData {
     /// # Warning
-    /// data must be trait object of type : Updateable, Collider, InputListener, or permutaition of those <br/>
-    /// if object implement more than one trait use the permutation version, so it will be registered as both trait <br/>
-    /// eg: `Updateable + Collider` use `CldrUpdt` 
-    pub fn from<T :?Sized + 'static>(data : Box<T>) -> Self {
+    /// data must be trait object of that implement `AppOwnedDataTrait` <br/>
+    /// if an object implement more than one trait that implement `AppOwnedDataTrait`, use the permutation version, so it will be registered as both trait <br/>
+    /// eg: `Collider + Updateable` use `CldrUpdt` 
+    #[allow(private_bounds)]
+    pub fn from<T :AppOwnedDataTrait + 'static>(data : T) -> Self {
         AppOwnedData(Box::new(data))
     }
     pub fn is_updateable(&self) -> bool {

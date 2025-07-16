@@ -4,10 +4,10 @@ use glow::{COLOR_BUFFER_BIT, HasContext};
 
 mod app_bootstraper;
 pub mod app_owned_data;
-mod registered_collider;
+mod collider;
 
 pub use app_bootstraper::AppBootstraper;
-pub use registered_collider::RegisteredCollider;
+pub use collider::RegisteredCollider;
 
 use crate::app::app_owned_data::AppOwnedData;
 

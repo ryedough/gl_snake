@@ -5,14 +5,14 @@ use crate::{
         App, AppBootstraper,
         app_owned_data::{AppOwnedData, UpdtInpLstr},
     },
-    object::snek::Snek,
-    shader::SnekShader,
+    objects::snek::Snek,
+    shaders::SnekShader,
 };
 
 mod app;
-mod mesh;
-mod object;
-mod shader;
+mod meshes;
+mod objects;
+mod shaders;
 
 fn main() {
     let gl_app = AppBootstraper::new(on_app_init);

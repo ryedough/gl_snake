@@ -3,8 +3,8 @@ use crate::{
         App,
         app_owned_data::{InputListener, Updateable},
     },
-    mesh,
-    shader::{SnekShader, Shader},
+    meshes,
+    shaders::{SnekShader, Shader},
 };
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -44,7 +44,7 @@ pub struct DirKeypoint {
 }
 
 pub struct Snek {
-    mesh: mesh::UnitRect,
+    mesh: meshes::UnitRect,
     shader: Rc<SnekShader>,
     position: Position,
     dir: MoveDir,
@@ -56,7 +56,7 @@ pub struct Snek {
 impl Snek {
     pub fn new(app: &mut App, shader: Rc<SnekShader>) -> Self {
         Snek {
-            mesh: mesh::UnitRect::new(&app.gl, shader.as_ref()),
+            mesh: meshes::UnitRect::new(&app.gl, shader.as_ref()),
             position: Position { x: 0.5, y: 0.5 },
             dir: MoveDir::Left,
             dir_keypoints: VecDeque::new(),

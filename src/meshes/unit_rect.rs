@@ -3,7 +3,7 @@ use std::{mem, rc::Rc};
 
 use glow::{HasContext, NativeBuffer, NativeVertexArray};
 
-use crate::shader::Shader;
+use crate::shaders::Shader;
 
 pub struct UnitRect<> {
     vao : NativeVertexArray,

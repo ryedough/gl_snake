@@ -5,8 +5,8 @@ use crate::{
         App, AppBootstraper,
         app_owned_data::{AppOwnedData, UpdtInpLstr},
     },
-    object::Snek,
-    shader::BasicShader,
+    object::snek::Snek,
+    shader::SnekShader,
 };
 
 mod app;
@@ -20,7 +20,7 @@ fn main() {
 }
 
 fn on_app_init(app: &mut App) {
-    let basic = Rc::new(BasicShader::new(&app.gl));
+    let basic = Rc::new(SnekShader::new(&app.gl));
     {
         let square = Snek::new(app, basic.clone());
         app.take(AppOwnedData::from(Box::new(square) as Box<dyn UpdtInpLstr>));

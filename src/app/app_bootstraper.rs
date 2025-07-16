@@ -145,6 +145,7 @@ impl ApplicationHandler for AppBootstraper {
     fn exiting(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         //clear window
         self.state = None;
+        self.app.as_mut().map(|app| app.on_exit());
 
         #[cfg(egl_backend)]
         {

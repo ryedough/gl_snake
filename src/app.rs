@@ -96,13 +96,18 @@ impl App {
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        for r in &self.input_listener_ids {
-            self.owned_data
-                .get_mut(r)
-                .expect("input listener ids should always updated to match existing item")
-                .as_input_listener()
-                .expect("input listener ids should always fetch input listener from owned data")
-                .on_input(&event);
+        match event {
+            winit::event::WindowEvent::KeyboardInput { device_id : _, event : _, is_synthetic :_ }  => {
+                for r in &self.input_listener_ids {
+                    self.owned_data
+                        .get_mut(r)
+                        .expect("input listener ids should always updated to match existing item")
+                        .as_input_listener()
+                        .expect("input listener ids should always fetch input listener from owned data")
+                        .on_input(&event);
+                }
+            },
+            _ => {},
         }
     }
 

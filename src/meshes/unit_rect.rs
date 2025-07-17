@@ -5,7 +5,7 @@ use glow::{HasContext, NativeBuffer, NativeVertexArray};
 
 use crate::shaders::Shader;
 
-pub struct UnitRect<> {
+pub struct UnitRect {
     vao : NativeVertexArray,
     vbo : NativeBuffer, 
     ebo : NativeBuffer,
@@ -57,7 +57,7 @@ impl UnitRect {
         Self { vao, vbo, ebo }
     }
 
-    pub fn render(&mut self, gl : &glow::Context, _ : &time::Duration, _ : &time::Duration) {
+    pub fn render(&mut self, gl : &glow::Context) {
         unsafe {
             gl.bind_vertex_array(Some(self.vao));
             gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);

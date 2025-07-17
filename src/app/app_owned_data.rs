@@ -1,7 +1,7 @@
 use core::time;
 use std::any::Any;
 
-use crate::app::RegisteredCollider;
+use crate::app::{board::Board, collider::ColliderType, App, ColliderLayer};
 
 pub struct AppOwnedData(Box<dyn Any>);
 
@@ -37,6 +37,19 @@ macro_rules! define_as {
         }
     }
 }
+macro_rules! define_as_ref {
+    ($name:ident : $base:path where $($ty: path),+) => {
+        pub fn $name(& self) -> Option<& dyn $base>{
+            $(
+                if self.is::<dyn $ty>(){
+                    let data = self.as_ref::<dyn $ty>()?;
+                    return Some(data.as_ref());
+                };
+            )+
+            return None;
+        }
+    }
+}
 
 impl AppOwnedData {
     /// # Warning
@@ -47,8 +60,11 @@ impl AppOwnedData {
     pub fn from<T: AppOwnedDataTrait + 'static>(data: T) -> Self {
         AppOwnedData(Box::new(data))
     }
+    
+    define_as! {as_setupable : Setupable where Updateable, Collider, InputListener, UpdtInpLstr, CldrUpdt, CldrInpLstr, CldrUpdtInpLstr }
     define_as! {as_updateable : Updateable where Updateable, UpdtInpLstr, CldrUpdt, CldrUpdtInpLstr}
     define_as! {as_collider : Collider where Collider, CldrInpLstr, CldrUpdt, CldrUpdtInpLstr}
+    define_as_ref! {as_ref_collider : Collider where Collider, CldrInpLstr, CldrUpdt, CldrUpdtInpLstr}
     define_as! {as_input_listener : InputListener where InputListener, CldrInpLstr, UpdtInpLstr, CldrUpdtInpLstr}
 
     fn is<T: ?Sized + 'static>(&self) -> bool {
@@ -57,31 +73,41 @@ impl AppOwnedData {
     pub fn as_mut<T: ?Sized + 'static>(&mut self) -> Option<&mut Box<T>> {
         self.0.downcast_mut::<Box<T>>()
     }
+    pub fn as_ref<T: ?Sized + 'static>(&self) -> Option<&Box<T>> {
+        self.0.downcast_ref::<Box<T>>()
+    }
 }
 
-pub trait InputListener
+pub trait Setupable {
+    fn on_setup(&mut self, gl: &glow::Context, registered_idx:usize, board: &Board);
+}
+
+pub trait InputListener : Setupable
 where
     Self: 'static,
 {
     fn on_input(&mut self, event: &winit::event::WindowEvent);
 }
 
-pub trait Updateable
+pub struct Time<'a> {
+    pub delta: &'a time::Duration, 
+    pub elapsed: &'a time::Duration,
+}
+pub trait Updateable : Setupable
 where
     Self: 'static,
 {
     /// Can also render inside this function
-    fn on_tick(&mut self, gl: &glow::Context, delta: &time::Duration, since_0: &time::Duration);
-    fn on_setup(&mut self, gl: &glow::Context);
+    fn on_tick(&mut self, gl: &glow::Context, time : &Time, board: &Board);
 }
 
-pub trait Collider
+pub trait Collider : Setupable
 where
     Self: 'static,
 {
-    fn on_collide(&mut self, other: &dyn Collider);
-    fn identifier(&self) -> RegisteredCollider;
-    fn check_collision(&self, other: &dyn Collider);
+    fn check_collision(&mut self, other: &dyn Collider);
+    fn layer(&self) -> ColliderLayer;
+    fn collider(&self) -> Vec<ColliderType>;
 }
 
 macro_rules! create_super_trait {

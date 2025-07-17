@@ -1,6 +1,4 @@
 #version 330
-#define SCREEN_H 400
-#define SCREEN_W 400
 #define MAX_KEYPOINTS 100
 
 #define UP 0
@@ -26,7 +24,7 @@ bool pointInRadius(vec2 pos, vec2 center);
 bool pointInBox(vec2 pos, vec2 boxStart, vec2 boxEnd);
 
 void main() {
-    vec2 frag_pos = vec2(gl_FragCoord.x/ SCREEN_W, gl_FragCoord.y / SCREEN_H);
+    vec2 frag_pos = vec2(gl_FragCoord.x, gl_FragCoord.y);
 
     float remainLength = uLength; 
 

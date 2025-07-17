@@ -11,23 +11,12 @@ use std::rc::Rc;
 
 const SPEED: f32 = 0.3;
 #[repr(u8)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MoveDir {
     Up,
     Right,
     Down,
     Left,
-}
-
-impl MoveDir {
-    pub fn inverse(&self) -> Self {
-        match self {
-            Self::Up => Self::Down,
-            Self::Down => Self::Up,
-            Self::Right => Self::Left,
-            Self::Left => Self::Right,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -70,7 +59,7 @@ impl Snek {
         let curr_x = self.position.x;
         let curr_y = self.position.y;
 
-        let (new_x, new_y) = match self.dir_candidate.as_ref().unwrap_or(&self.dir) {
+        let (new_x, new_y) = match self.dir {
             MoveDir::Down => {
                 let new_y = curr_y - move_dist;
                 (curr_x, f32::max(f32::min(1., new_y), 0.))
@@ -133,15 +122,22 @@ impl Updateable for Snek {
         let move_dist = SPEED * delta.as_secs_f32();
         self.process_move(move_dist);
         self.process_dir_keypoints(move_dist);
-        self.dir_candidate.take().map(|dir| {
-            // process new direction fired from keyboard
-            self.dir_keypoints.push_back(DirKeypoint {
-                from: self.dir.clone(),
-                at: self.position.clone(),
-                dst_head: 0.0,
+
+        let last_move_pos = self.dir_keypoints.back();
+        if let Some(last_move_pos) = last_move_pos 
+            && last_move_pos.dst_head < 0.1{
+                
+        } else {
+            self.dir_candidate.take().map(|dir| {
+                // process new direction fired from keyboard
+                self.dir_keypoints.push_back(DirKeypoint {
+                    from: self.dir.clone(),
+                    at: self.position.clone(),
+                    dst_head: 0.0,
+                });
+                self.dir = dir;
             });
-            self.dir = dir;
-        });
+        }
         self.shader
             .set_keypoints(gl, &self.get_keypoints());
         self.mesh.render(gl, delta, since_0);
@@ -165,33 +161,33 @@ impl InputListener for Snek {
                 match event.physical_key {
                     PhysicalKey::Code(KeyCode::ArrowUp) | PhysicalKey::Code(KeyCode::KeyW) => {
                         match self.dir {
-                            MoveDir::Down => {}
+                            MoveDir::Down | MoveDir::Up => {}
                             _ => {
-                                self.dir_candidate.get_or_insert(MoveDir::Up);
+                                self.dir_candidate.insert(MoveDir::Up);
                             }
                         }
                     }
                     PhysicalKey::Code(KeyCode::ArrowLeft) | PhysicalKey::Code(KeyCode::KeyA) => {
                         match self.dir {
-                            MoveDir::Right => {}
+                            MoveDir::Right | MoveDir::Left => {}
                             _ => {
-                                self.dir_candidate.get_or_insert(MoveDir::Left);
+                                self.dir_candidate.insert(MoveDir::Left);
                             }
                         }
                     }
                     PhysicalKey::Code(KeyCode::ArrowRight) | PhysicalKey::Code(KeyCode::KeyD) => {
                         match self.dir {
-                            MoveDir::Left => {}
+                            MoveDir::Left | MoveDir::Right => {}
                             _ => {
-                                self.dir_candidate.get_or_insert(MoveDir::Right);
+                                self.dir_candidate.insert(MoveDir::Right);
                             }
                         }
                     }
                     PhysicalKey::Code(KeyCode::ArrowDown) | PhysicalKey::Code(KeyCode::KeyS) => {
                         match self.dir {
-                            MoveDir::Up => {}
+                            MoveDir::Up | MoveDir::Down => {}
                             _ => {
-                                self.dir_candidate.get_or_insert(MoveDir::Down);
+                                self.dir_candidate.insert(MoveDir::Down);
                             }
                         }
                     }

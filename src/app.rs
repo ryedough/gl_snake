@@ -60,18 +60,16 @@ impl App {
     }
 
     // become owner of taken data
-    pub fn take(&mut self, data: AppOwnedData) {
+    pub fn take(&mut self, mut data: AppOwnedData) {
         let curr_data_counter = self.owned_data_counter;
 
-        println!("is updateable : {}, is_collider : {}, is_input_listener : {}", data.is_updateable(), data.is_collider(), data.is_input_listener());
-
-        if data.is_updateable() {
+        if data.as_updateable().is_some() {
             self.updateable_ids.push(curr_data_counter);
         }
-        if data.is_collider() {
+        if data.as_collider().is_some() {
             self.collider_ids.push(curr_data_counter);
         }
-        if data.is_input_listener() {
+        if data.as_input_listener().is_some() {
             self.input_listener_ids.push(curr_data_counter);
         }
 
@@ -85,7 +83,7 @@ impl App {
 
         if self.record_fps {
             let fps = Duration::from_secs(1).div_duration_f32(delta);
-            if self.render_count % 500 == 0 {
+            if self.render_count % 50 == 0 {
                 println!("sampled : {fps} fps");
                 self.fps.push(fps);
             }
@@ -108,8 +106,10 @@ impl App {
     }
 
     pub fn on_exit(&mut self) {
-        let fps_len = self.fps.len();
-        println!("fps_avg over {} sample : {} fps", fps_len, self.fps.iter().sum::<f32>() / fps_len as f32)
+        if self.record_fps {
+            let fps_len = self.fps.len();
+            println!("fps_avg over {} sample : {} fps", fps_len, self.fps.iter().sum::<f32>() / fps_len as f32)
+        }
     }
 
     pub fn window_event(

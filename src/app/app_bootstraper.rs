@@ -1,4 +1,4 @@
-use std::{num::NonZero};
+use std::{num::NonZero, time::{self, Duration, SystemTime}};
 use glutin::{
     context::NotCurrentContext, config::{Config, ConfigTemplateBuilder, GetGlConfig}, context::{ContextApi, ContextAttributesBuilder, PossiblyCurrentContext, Version}, display::GetGlDisplay, prelude::*, surface::{Surface, WindowSurface}
 };
@@ -7,7 +7,7 @@ use winit::{
     application::ApplicationHandler, dpi::{LogicalSize, PhysicalSize}, error::EventLoopError, event::WindowEvent, event_loop::{ControlFlow, EventLoop}, keyboard::Key, raw_window_handle::HasWindowHandle, window::{Window, WindowAttributes}
 };
 
-use crate::app::App;
+use crate::{app::App, MAX_FPS, WINDOW_HEIGHT, WINDOW_WIDTH};
 
 enum GlDisplayCreationState {
     Unbuilt(DisplayBuilder),
@@ -26,7 +26,10 @@ pub struct AppBootstraper {
     template: ConfigTemplateBuilder,
     app : Option<App>,
     on_app_init : fn(&mut App),
+    last_render : Option<SystemTime>,
 }
+
+const MAX_FPS_PROC:f32 = 1./MAX_FPS;
 
 // responsible for creating & managing window & gl context
 impl AppBootstraper {
@@ -36,8 +39,9 @@ impl AppBootstraper {
             gl_context: None,
             app : None,
             gl_display: GlDisplayCreationState::Unbuilt(DisplayBuilder::new().with_window_attributes(Some(window_attributes()))),
-            template: ConfigTemplateBuilder::default(),
-            on_app_init
+            template: ConfigTemplateBuilder::default().prefer_hardware_accelerated(Some(true)),
+            on_app_init,
+            last_render: None,
         }
     }
 
@@ -159,7 +163,10 @@ impl ApplicationHandler for AppBootstraper {
         }
     }
     fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        if let Some(AppState { gl_surface, window }) = self.state.as_ref() {
+        let last_render = self.last_render.get_or_insert(time::SystemTime::now());
+        if let Some(AppState { gl_surface, window }) = self.state.as_ref() 
+            && time::SystemTime::now().duration_since(*last_render).unwrap().as_secs_f32() > MAX_FPS_PROC{
+            let _ = self.last_render.insert(SystemTime::now());
             let gl_context = self.gl_context.as_ref().unwrap();
             self.app.as_mut().map(|r|r.render());
             window.request_redraw();
@@ -189,7 +196,7 @@ fn window_attributes() -> WindowAttributes {
         .with_transparent(true)
         .with_title("GL_Snek")
         .with_resizable(false)
-        .with_inner_size(PhysicalSize::new(400, 400))
+        .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
 }
 
 fn create_gl_context(window: &Window, gl_config: &Config) -> NotCurrentContext {

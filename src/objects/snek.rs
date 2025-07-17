@@ -15,7 +15,7 @@ pub enum MoveDir {
     Left,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
@@ -127,37 +127,45 @@ impl Updateable for Snek {
         self.process_dir_keypoints(move_dist);
 
         let current_midpoint = self.board.current_midpts(self.position.clone()).unwrap();
+        let last_move_midpoint = if let Some(last_move) = self.dir_keypoints.back() {
+            self.board.current_midpts(last_move.at.clone()) 
+        }else{
+            None
+        };
 
-        let mut adjusted_position : Option<Position> = None;
-        match self.dir {
-            MoveDir::Up | MoveDir::Down => {
-                if (self.position.y - current_midpoint.y).abs() < GRID_TRESHOLD {
-                    adjusted_position = Some(Position{
-                        x : self.position.x,
-                        y : current_midpoint.y,
-                    });
-                }
-            },
-            MoveDir::Left | MoveDir::Right => {
-                if (self.position.x - current_midpoint.x).abs() < GRID_TRESHOLD {
-                    adjusted_position = Some(Position{
-                        x : current_midpoint.x,
-                        y : self.position.y,
-                    });
+        if self.dir_candidate.is_some() && last_move_midpoint.is_none_or(|lm|lm != current_midpoint){
+            let mut adjusted_position : Option<Position> = None;
+            match self.dir {
+                MoveDir::Up | MoveDir::Down => {
+                    if (self.position.y - current_midpoint.y).abs() < GRID_TRESHOLD {
+                        adjusted_position = Some(Position{
+                            x : self.position.x,
+                            y : current_midpoint.y,
+                        });
+                    }
+                },
+                MoveDir::Left | MoveDir::Right => {
+                    if (self.position.x - current_midpoint.x).abs() < GRID_TRESHOLD {
+                        adjusted_position = Some(Position{
+                            x : current_midpoint.x,
+                            y : self.position.y,
+                        });
+                    }
                 }
             }
-        }
-        println!("{:?}", self.position);
-        if let Some(pos) = adjusted_position {
-            self.dir_candidate.take().map(|dir| {
-                // process new direction fired from keyboard
-                self.dir_keypoints.push_back(DirKeypoint {
-                    from: self.dir.clone(),
-                    at: pos,
-                    dst_head: 0.0,
+            if let Some(pos) = adjusted_position {
+                self.dir_candidate.take().map(|dir| {
+                    println!("direction : {:?}, candidate : {:?}", self.dir, dir);
+                    // process new direction fired from keyboard
+                    self.dir_keypoints.push_back(DirKeypoint {
+                        from: self.dir.clone(),
+                        at: pos.clone(),
+                        dst_head: 0.0,
+                    });
+                    self.dir = dir;
+                    self.position = pos;
                 });
-                self.dir = dir;
-            });
+            }
         }
 
         
@@ -186,7 +194,7 @@ impl InputListener for Snek {
                         match self.dir {
                             MoveDir::Down | MoveDir::Up => {}
                             _ => {
-                                self.dir_candidate.insert(MoveDir::Up);
+                                self.dir_candidate= Some(MoveDir::Up);
                             }
                         }
                     }
@@ -194,7 +202,7 @@ impl InputListener for Snek {
                         match self.dir {
                             MoveDir::Right | MoveDir::Left => {}
                             _ => {
-                                self.dir_candidate.insert(MoveDir::Left);
+                                self.dir_candidate= Some(MoveDir::Left);
                             }
                         }
                     }
@@ -202,7 +210,7 @@ impl InputListener for Snek {
                         match self.dir {
                             MoveDir::Left | MoveDir::Right => {}
                             _ => {
-                                self.dir_candidate.insert(MoveDir::Right);
+                                self.dir_candidate= Some(MoveDir::Right);
                             }
                         }
                     }
@@ -210,7 +218,7 @@ impl InputListener for Snek {
                         match self.dir {
                             MoveDir::Up | MoveDir::Down => {}
                             _ => {
-                                self.dir_candidate.insert(MoveDir::Down);
+                                self.dir_candidate= Some(MoveDir::Down);
                             }
                         }
                     }

@@ -14,6 +14,10 @@ mod meshes;
 mod objects;
 mod shaders;
 
+pub const MAX_FPS : f32 = 60.; 
+pub const WINDOW_WIDTH : u16 = 400;
+pub const WINDOW_HEIGHT : u16 = 400;
+
 fn main() {
     let gl_app = AppBootstraper::new(on_app_init);
     gl_app.exec().unwrap();

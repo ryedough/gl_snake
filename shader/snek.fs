@@ -30,21 +30,15 @@ void main() {
 
     float remainLength = uLength; 
 
-    for(uint _i= uKeypointLen; _i > uint(0); _i--) {
-        uint i = _i-uint(1);
+    for(int i= int(uKeypointLen)-1; i >= 0; i--) {
 
         MoveKeypoint current = uKeypoints[i];
-
-        if(pointInRadius(frag_pos, current.at)){
-            gl_FragColor = vec4(1., 1., 1., 1.0);
-            return;
-        }
 
         //set next dst
         //TODO: set this to remaining snake length when no next keypoint
         float nextDst = remainLength;
-        if(_i > uint(1)){
-            uint nextIdx = i-uint(1);
+        if(i > 0){
+            int nextIdx = i - 1 ;
             nextDst = uKeypoints[nextIdx].dstHead - current.dstHead;
             remainLength -= nextDst;
         } else {
@@ -61,11 +55,6 @@ void main() {
                 return;
             }
         };
-
-        if(nextDst == 0){
-            discard;
-            return;
-        }
 
         switch(current.from){
             case UP :
@@ -100,6 +89,11 @@ void main() {
                         return;
                 }
                 break;
+        }
+
+        if(pointInRadius(frag_pos, current.at)){
+            gl_FragColor = vec4(1., 1., 1., 1.0);
+            return;
         }
     };
     discard;  

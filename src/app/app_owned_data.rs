@@ -5,91 +5,52 @@ use crate::app::RegisteredCollider;
 
 pub struct AppOwnedData(Box<dyn Any>);
 
-trait AppOwnedDataTrait{}
-impl AppOwnedDataTrait for Box<dyn Updateable> {}
-impl AppOwnedDataTrait for Box<dyn Collider> {}
-impl AppOwnedDataTrait for Box<dyn InputListener> {}
-impl AppOwnedDataTrait for Box<dyn UpdtInpLstr> {}
-impl AppOwnedDataTrait for Box<dyn CldrUpdt> {}
-impl AppOwnedDataTrait for Box<dyn CldrInpLstr> {}
-impl AppOwnedDataTrait for Box<dyn CldrUpdtInpLstr> {}
+trait AppOwnedDataTrait {}
+macro_rules! impl_app_owned_data_trait {
+    ($($ty:path),+) => {
+        $(
+            impl AppOwnedDataTrait for Box<dyn $ty>{}
+        )+
+    };
+}
+
+impl_app_owned_data_trait! {
+    Updateable,
+    Collider,
+    InputListener,
+    UpdtInpLstr,
+    CldrUpdt,
+    CldrInpLstr,
+    CldrUpdtInpLstr
+}
+
+macro_rules! define_as {
+    ($name:ident : $base:path where $($ty: path),+) => {
+        pub fn $name(&mut self) -> Option<&mut dyn $base>{
+            $(
+                if self.is::<dyn $ty>(){
+                    let data = self.as_mut::<dyn $ty>()?;
+                    return Some(data.as_mut());
+                };
+            )+
+            return None;
+        }
+    }
+}
 
 impl AppOwnedData {
     /// # Warning
     /// data must be trait object of that implement `AppOwnedDataTrait` <br/>
     /// if an object implement more than one trait that implement `AppOwnedDataTrait`, use the permutation version, so it will be registered as both trait <br/>
-    /// eg: `Collider + Updateable` use `CldrUpdt` 
+    /// eg: `Collider + Updateable` use `CldrUpdt`
     #[allow(private_bounds)]
-    pub fn from<T :AppOwnedDataTrait + 'static>(data : T) -> Self {
+    pub fn from<T: AppOwnedDataTrait + 'static>(data: T) -> Self {
         AppOwnedData(Box::new(data))
     }
-    pub fn is_updateable(&self) -> bool {
-        self.is::<dyn Updateable>()
-            || self.is::<dyn UpdtInpLstr>()
-            || self.is::<dyn CldrUpdt>()
-            || self.is::<dyn CldrUpdtInpLstr>()
-    }
-    pub fn is_collider(&self) -> bool {
-        self.is::<dyn Collider>()
-            || self.is::<dyn CldrInpLstr>()
-            || self.is::<dyn CldrUpdt>()
-            || self.is::<dyn CldrUpdtInpLstr>()
-    }
-    pub fn is_input_listener(&self) -> bool {
-        self.is::<dyn InputListener>()
-            || self.is::<dyn CldrInpLstr>()
-            || self.is::<dyn UpdtInpLstr>()
-            || self.is::<dyn CldrUpdtInpLstr>()
-    }
-    pub fn as_updateable(&mut self) -> Option<&mut dyn Updateable>{
-        //TODO: make these macro variadic
-        macro_rules! try_downcast {
-            ($ty:ty) => {
-                if self.is::<$ty>(){
-                    let data = self.as_mut::<$ty>()?; 
-                    return Some(data.as_mut());
-                }
-            }
-        }
-        
-        try_downcast!(dyn Updateable);
-        try_downcast!(dyn UpdtInpLstr);
-        try_downcast!(dyn CldrUpdt);
-        try_downcast!(dyn CldrUpdtInpLstr);
-        return None
-    }
-    pub fn as_collider(&mut self) -> Option<&mut dyn Collider>{
-        macro_rules! try_downcast {
-            ($ty:ty) => {
-                if self.is::<$ty>(){
-                    let data = self.as_mut::<$ty>()?; 
-                    return Some(data.as_mut());
-                }
-            }
-        }
-        
-        try_downcast!(dyn Collider);
-        try_downcast!(dyn CldrInpLstr);
-        try_downcast!(dyn CldrUpdt);
-        try_downcast!(dyn CldrUpdtInpLstr);
-        return None
-    }
-    pub fn as_input_listener(&mut self) -> Option<&mut dyn InputListener>{
-        macro_rules! try_downcast {
-            ($ty:ty) => {
-                if self.is::<$ty>(){
-                    let data = self.as_mut::<$ty>()?; 
-                    return Some(data.as_mut());
-                }
-            }
-        }
-        
-        try_downcast!(dyn InputListener);
-        try_downcast!(dyn CldrInpLstr);
-        try_downcast!(dyn UpdtInpLstr);
-        try_downcast!(dyn CldrUpdtInpLstr);
-        return None
-    }
+    define_as! {as_updateable : Updateable where Updateable, UpdtInpLstr, CldrUpdt, CldrUpdtInpLstr}
+    define_as! {as_collider : Collider where Collider, CldrInpLstr, CldrUpdt, CldrUpdtInpLstr}
+    define_as! {as_input_listener : InputListener where InputListener, CldrInpLstr, UpdtInpLstr, CldrUpdtInpLstr}
+
     fn is<T: ?Sized + 'static>(&self) -> bool {
         self.0.is::<Box<T>>()
     }
@@ -123,18 +84,14 @@ where
     fn check_collision(&self, other: &dyn Collider);
 }
 
-// TODO: using macro to create these shits
-// 1st degree Permutation of the basic traits ---------------------------------------------
-pub trait UpdtInpLstr: Updateable + InputListener {}
-impl<T: Updateable + InputListener> UpdtInpLstr for T {}
+macro_rules! create_super_trait {
+    ($name:ident : $($bounds:path),+) => {
+        pub trait $name: $($bounds + )+ {}
+        impl<T: $($bounds + )+> $name for T {}
+    };
+}
 
-pub trait CldrUpdt : Collider + Updateable {}
-impl<T: Collider + Updateable> CldrUpdt for T {}
-
-pub trait CldrInpLstr : Collider + InputListener {}
-impl<T: Collider + InputListener> CldrInpLstr for T {}
-
-// 2nd degree permutation -----------------------------------------------------------
-pub trait CldrUpdtInpLstr : Collider + Updateable + InputListener {}
-
-impl<T: Collider + Updateable + InputListener> CldrUpdtInpLstr for T {}
+create_super_trait!(UpdtInpLstr: Updateable, InputListener);
+create_super_trait!(CldrUpdt: Collider, Updateable);
+create_super_trait!(CldrInpLstr: Collider, InputListener);
+create_super_trait!(CldrUpdtInpLstr: Collider, Updateable, InputListener);

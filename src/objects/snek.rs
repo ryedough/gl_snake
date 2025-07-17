@@ -1,17 +1,13 @@
 use crate::{
     app::{
-        App,
-        app_owned_data::{InputListener, Updateable},
-    },
-    meshes,
-    shaders::{SnekShader, Shader},
+        app_owned_data::{InputListener, Updateable}, App
+    }, meshes, shaders::{Shader, SnekShader}, Board
 };
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-const SPEED: f32 = 0.3;
 #[repr(u8)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub enum MoveDir {
     Up,
     Right,
@@ -40,18 +36,25 @@ pub struct Snek {
     dir_candidate: Option<MoveDir>,
     dir_keypoints: VecDeque<DirKeypoint>,
     length: f32,
+    radius : f32,
+    board: Board
 }
 
+const GRID_TRESHOLD :f32 = 3.;
+const INIT_SPEED: f32 = 70.;
+
 impl Snek {
-    pub fn new(app: &mut App, shader: Rc<SnekShader>) -> Self {
+    pub fn new(app: &mut App, shader: Rc<SnekShader>, board:Board) -> Self {
         Snek {
             mesh: meshes::UnitRect::new(&app.gl, shader.as_ref()),
-            position: Position { x: 0.5, y: 0.5 },
+            position: Position { x: board.width/2., y: board.height/2. },
             dir: MoveDir::Left,
             dir_keypoints: VecDeque::new(),
             dir_candidate: None,
-            length: 0.4,
+            length: 40.,
             shader,
+            radius :board.grid_size/2.,
+            board
         }
     }
 
@@ -62,19 +65,19 @@ impl Snek {
         let (new_x, new_y) = match self.dir {
             MoveDir::Down => {
                 let new_y = curr_y - move_dist;
-                (curr_x, f32::max(f32::min(1., new_y), 0.))
+                (curr_x, f32::max(f32::min(self.board.height- self.radius, new_y), 0. + self.radius))
             }
             MoveDir::Up => {
                 let new_y = curr_y + move_dist;
-                (curr_x, f32::max(f32::min(1., new_y), 0.))
+                (curr_x, f32::max(f32::min(self.board.height- self.radius, new_y), 0. + self.radius))
             }
             MoveDir::Left => {
                 let new_x = curr_x - move_dist;
-                (f32::max(f32::min(1., new_x), 0.), curr_y)
+                (f32::max(f32::min(self.board.width- self.radius, new_x), 0. + self.radius), curr_y)
             }
             MoveDir::Right => {
                 let new_x = curr_x + move_dist;
-                (f32::max(f32::min(1., new_x), 0.), curr_y)
+                (f32::max(f32::min(self.board.width- self.radius, new_x), 0. + self.radius), curr_y)
             }
         };
         self.position.x = new_x;
@@ -108,7 +111,7 @@ impl Snek {
 impl Updateable for Snek {
     fn on_setup(&mut self, gl: &glow::Context) {
         self.shader.use_shader(gl);
-        self.shader.set_circle_radius(gl, 0.05);
+        self.shader.set_circle_radius(gl, self.radius);
         self.shader.set_length(gl, self.length);
     }
     fn on_tick(
@@ -119,25 +122,45 @@ impl Updateable for Snek {
     ) {
         self.shader.use_shader(gl);
 
-        let move_dist = SPEED * delta.as_secs_f32();
+        let move_dist = INIT_SPEED * delta.as_secs_f32();
         self.process_move(move_dist);
         self.process_dir_keypoints(move_dist);
 
-        let last_move_pos = self.dir_keypoints.back();
-        if let Some(last_move_pos) = last_move_pos 
-            && last_move_pos.dst_head < 0.1{
-                
-        } else {
+        let current_midpoint = self.board.current_midpts(self.position.clone()).unwrap();
+
+        let mut adjusted_position : Option<Position> = None;
+        match self.dir {
+            MoveDir::Up | MoveDir::Down => {
+                if (self.position.y - current_midpoint.y).abs() < GRID_TRESHOLD {
+                    adjusted_position = Some(Position{
+                        x : self.position.x,
+                        y : current_midpoint.y,
+                    });
+                }
+            },
+            MoveDir::Left | MoveDir::Right => {
+                if (self.position.x - current_midpoint.x).abs() < GRID_TRESHOLD {
+                    adjusted_position = Some(Position{
+                        x : current_midpoint.x,
+                        y : self.position.y,
+                    });
+                }
+            }
+        }
+        println!("{:?}", self.position);
+        if let Some(pos) = adjusted_position {
             self.dir_candidate.take().map(|dir| {
                 // process new direction fired from keyboard
                 self.dir_keypoints.push_back(DirKeypoint {
                     from: self.dir.clone(),
-                    at: self.position.clone(),
+                    at: pos,
                     dst_head: 0.0,
                 });
                 self.dir = dir;
             });
         }
+
+        
         self.shader
             .set_keypoints(gl, &self.get_keypoints());
         self.mesh.render(gl, delta, since_0);

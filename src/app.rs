@@ -4,12 +4,13 @@ use glow::{COLOR_BUFFER_BIT, HasContext};
 
 mod app_bootstraper;
 pub mod app_owned_data;
-mod collider;
+pub mod collider;
+pub mod board;
 
 pub use app_bootstraper::AppBootstraper;
-pub use collider::RegisteredCollider;
+pub use collider::ColliderLayer;
 
-use crate::app::app_owned_data::AppOwnedData;
+use crate::{app::{app_owned_data::{AppOwnedData, Time}, board::Board}, WINDOW_HEIGHT, WINDOW_WIDTH};
 
 pub struct App {
     pub gl: glow::Context,
@@ -20,6 +21,7 @@ pub struct App {
     input_listener_ids: Vec<usize>,
     collider_ids: Vec<usize>,
 
+    board : Board,
     owned_data: HashMap<usize, AppOwnedData>,
     owned_data_counter: usize,
 
@@ -35,11 +37,15 @@ impl App {
             gl,
             t_last_render: time::SystemTime::now(),
             t_0: time::SystemTime::now(),
+
             updateable_ids: Vec::new(),
             input_listener_ids: Vec::new(),
             collider_ids: Vec::new(),
+
+            board : Board::new(WINDOW_WIDTH, WINDOW_HEIGHT, 25),
             owned_data: HashMap::new(),
             owned_data_counter: 0,
+
             fps: Vec::with_capacity(100),
             record_fps : true,
             render_count : 0,
@@ -55,7 +61,7 @@ impl App {
                 .expect("updateable ids should always updated to match existing item")
                 .as_updateable()
                 .expect("updateable ids should always fetch updateable from owned data")
-                .on_setup(&self.gl);       
+                .on_setup(&self.gl, *idx, &self.board);       
         }
     }
 
@@ -80,6 +86,10 @@ impl App {
     pub fn render(&mut self) {
         self.render_count +=1;
         let delta = self.calc_delta();
+        let time =  Time{
+                    delta : &delta, 
+                    elapsed : &self.elapsed(),
+                };
 
         if self.record_fps {
             let fps = Duration::from_secs(1).div_duration_f32(delta);
@@ -94,14 +104,49 @@ impl App {
             self.gl.clear(COLOR_BUFFER_BIT);
         }
 
-        for r in &self.updateable_ids {
-            let elapsed = self.elapsed();
+        for idx in &self.updateable_ids {
             self.owned_data
-                .get_mut(r)
+                .get_mut(idx)
                 .expect("updateable ids should always updated to match existing item")
                 .as_updateable()
                 .expect("updateable ids should always fetch updateable from owned data")
-                .on_tick(&self.gl, &delta, &elapsed);
+                .on_tick(&self.gl, &time, &self.board);
+        }
+        for (arr_s, idx_a) in self.collider_ids.iter().enumerate() {
+            for idx_b in &self.collider_ids[arr_s+1..] {
+                {
+                    // check a against b from a side
+                    // removing the b to satisfy borrow checker (it cant do multiple borrow at once)
+                    let cldr_b = self.owned_data
+                        .remove(idx_b)
+                        .expect("collider ids should always updated to match existing item");
+                        
+                    let cldr_a = self.owned_data
+                        .get_mut(idx_a)
+                        .expect("collider ids should always updated to match existing item")
+                        .as_collider()
+                        .expect("collider ids should always fetch collider from owned data");
+                    
+                    cldr_a.check_collision(cldr_b.as_ref_collider().expect("collider ids should always fetch collider from owned data"));
+                    self.owned_data.insert(*idx_b, cldr_b);
+                }
+                {
+                    // check a against b from b side
+                    // removing the a to satisfy borrow checker (it cant do multiple borrow at once)
+                    let cldr_a = self.owned_data
+                        .remove(idx_a)
+                        .expect("collider ids should always updated to match existing item");
+                        
+                    let cldr_b = self.owned_data
+                        .get_mut(idx_b)
+                        .expect("collider ids should always updated to match existing item")
+                        .as_collider()
+                        .expect("collider ids should always fetch collider from owned data");
+                    
+                    cldr_b.check_collision(cldr_a.as_ref_collider().expect("collider ids should always fetch collider from owned data"));
+                    self.owned_data.insert(*idx_a, cldr_a);
+                }
+            }
         }
     }
 

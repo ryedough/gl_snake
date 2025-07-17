@@ -1,8 +1,10 @@
 use glow::{HasContext, NativeProgram};
 
 mod snek;
+mod food;
 
 pub use snek::SnekShader;
+pub use food::FoodShader;
 
 pub trait Shader {
     fn use_shader(&self, gl: &glow::Context);

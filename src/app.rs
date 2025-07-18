@@ -27,12 +27,13 @@ pub struct App {
 
     fps : Vec<f32>,
     record_fps : bool,
+    render_count : usize,
 
-    render_count : usize 
+    on_app_init : fn(&mut Self)
 }
 
 impl App {
-    pub fn new(gl: glow::Context) -> Self {
+    pub fn new(gl: glow::Context, on_app_init : fn(&mut Self)) -> Self {
         let mut _self = Self {
             gl,
             t_last_render: time::SystemTime::now(),
@@ -47,14 +48,18 @@ impl App {
             owned_data_counter: 0,
 
             fps: Vec::with_capacity(100),
-            record_fps : true,
+            record_fps : false,
             render_count : 0,
+            on_app_init,
         };
+
+        on_app_init(&mut _self);
+        _self.after_on_app_init();
 
         _self
     }
 
-    pub fn after_on_app_init(&mut self) {
+    fn after_on_app_init(&mut self) {
         for idx in &mut self.updateable_ids {
             self.owned_data
                 .get_mut(&idx)

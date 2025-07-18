@@ -20,6 +20,17 @@ pub enum MoveDir {
     Left,
 }
 
+impl MoveDir {
+    fn invert(&self) -> Self{
+        match self {
+            Self::Up => Self::Down,
+            Self::Right => Self::Left,
+            Self::Down => Self::Up,
+            Self::Left => Self::Right,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct DirKeypoint {
     pub from: MoveDir,
@@ -27,8 +38,8 @@ pub struct DirKeypoint {
     pub dst_head: f32,
 }
 
-const GRID_TRESHOLD: f32 = 3.;
-const INIT_LENGTH: f32 = 80.;
+const GRID_TRESHOLD: f32 = 4.;
+const INIT_LENGTH: f32 = 300.;
 const LENGTH_PER_FOOD: f32 = 10.;
 const INIT_SPEED: f32 = 100.;
 const MAX_SPEED:f32 = 160.;
@@ -121,7 +132,7 @@ impl Snek {
         let curr_point = DirKeypoint {
             at: self.position.clone(),
             dst_head: 0.,
-            from: self.dir.clone(),
+            from: self.dir.clone().invert(),
         };
 
         let kp_slice = self.dir_keypoints.as_slices();
@@ -168,10 +179,12 @@ impl Updateable for Snek {
         {
             let mut adjusted_position: Option<Position> = None;
             let treshold = (GRID_TRESHOLD + ((self.speed / INIT_SPEED)-1.) *3.).clamp(0., board.grid_size * 0.9);
+            //TODO: correct keypoint after correction
+            let correction;
             match self.dir {
                 MoveDir::Up | MoveDir::Down => {
-                    if (self.position.y - current_midpoint.y).abs() < treshold {
-                        println!("{treshold}");
+                    correction = current_midpoint.y - self.position.y;
+                    if correction.abs() < treshold {
                         adjusted_position = Some(Position {
                             x: self.position.x,
                             y: current_midpoint.y,
@@ -179,8 +192,8 @@ impl Updateable for Snek {
                     }
                 }
                 MoveDir::Left | MoveDir::Right => {
-                    if (self.position.x - current_midpoint.x).abs() < treshold {
-                        println!("{treshold}");
+                    correction = current_midpoint.x - self.position.x;
+                    if correction.abs() < treshold {
                         adjusted_position = Some(Position {
                             x: current_midpoint.x,
                             y: self.position.y,
@@ -190,10 +203,9 @@ impl Updateable for Snek {
             }
             if let Some(pos) = adjusted_position {
                 self.dir_candidate.take().map(|dir| {
-                    println!("direction : {:?}, candidate : {:?}", self.dir, dir);
                     // process new direction fired from keyboard
                     self.dir_keypoints.push_back(DirKeypoint {
-                        from: self.dir.clone(),
+                        from: self.dir.clone().invert(),
                         at: pos.clone(),
                         dst_head: 0.0,
                     });

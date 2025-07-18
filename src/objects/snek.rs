@@ -8,7 +8,7 @@ use crate::{
     meshes,
     shaders::{Shader, SnekShader},
 };
-use std::collections::VecDeque;
+use std::{cmp, collections::VecDeque, time::Duration};
 use std::rc::Rc;
 
 #[repr(u8)]
@@ -39,11 +39,12 @@ pub struct DirKeypoint {
 }
 
 const GRID_TRESHOLD: f32 = 4.;
-const INIT_LENGTH: f32 = 300.;
+const INIT_LENGTH: f32 = 100.;
 const LENGTH_PER_FOOD: f32 = 10.;
-const INIT_SPEED: f32 = 100.;
+const INIT_SPEED: f32 = 120.;
 const MAX_SPEED:f32 = 160.;
 const SPEED_PER_FOOD: f32 = 3.;
+const MAX_DURATION_ON_EDGE:f32 = 0.1;
 
 pub struct Snek {
     mesh: meshes::UnitRect,
@@ -54,7 +55,9 @@ pub struct Snek {
     dir_keypoints: VecDeque<DirKeypoint>,
     length: f32,
     radius: f32,
-    speed: f32
+    speed: f32,
+    in_edge : Duration,
+    game_over : bool,
 }
 
 impl Snek {
@@ -69,6 +72,8 @@ impl Snek {
             speed: INIT_SPEED,
             shader,
             radius: 0.,
+            in_edge : Duration::from_secs(0),
+            game_over : false,
         }
     }
 
@@ -138,6 +143,13 @@ impl Snek {
         let kp_slice = self.dir_keypoints.as_slices();
         [kp_slice.0, kp_slice.1, &[curr_point]].concat()
     }
+    fn on_edge(&mut self, delta : &Duration) {
+        if self.in_edge > Duration::from_secs_f32(MAX_DURATION_ON_EDGE){
+            self.game_over = true;
+        }else{
+            self.in_edge += *delta;
+        }
+    }
 }
 
 impl Setupable for Snek {
@@ -160,12 +172,23 @@ impl Updateable for Snek {
         gl: &glow::Context,
         time: &crate::app::app_owned_data::Time,
         board: &Board,
+        game_over : &mut dyn FnMut(),
     ) {
+        if self.game_over {
+            return game_over();
+        }
         self.shader.use_shader(gl);
 
         let move_dist = self.speed * time.delta.as_secs_f32();
         self.process_move(board, move_dist);
-        self.process_dir_keypoints(move_dist);
+
+        match self.dir {
+            MoveDir::Right if self.position.x == board.width - self.radius => {self.on_edge(time.delta)},
+            MoveDir::Left if self.position.x == self.radius => {self.on_edge(time.delta)},
+            MoveDir::Up if self.position.y == board.height - self.radius => {self.on_edge(time.delta)},
+            MoveDir::Down if self.position.y == self.radius => {self.on_edge(time.delta)},
+            _ => {self.process_dir_keypoints(move_dist); self.in_edge = Duration::from_secs(0)}
+        }
 
         let current_midpoint = board.current_midpts(self.position.clone()).unwrap();
         let last_move_midpoint = if let Some(last_move) = self.dir_keypoints.back() {
@@ -230,7 +253,7 @@ impl Collider for Snek {
             return;
         }
 
-        let head = AABB::new(
+        let head_cldr = AABB::new(
             Position {
                 x : self.position.x - self.radius * 0.9,
                 y : self.position.y - self.radius * 0.9,
@@ -240,36 +263,127 @@ impl Collider for Snek {
                 y : self.position.y + self.radius * 0.9,
             },
         );
+        let self_cldr= self.collider();
+        let self_cldr = self_cldr.split_at_checked(2);
+        let mut head_collide_self = false;
+        match self_cldr {
+            Some((_,self_cldr)) => {
+                head_collide_self = self_cldr.iter().any(|self_cldr|match self_cldr {
+                    ColliderType::AABB(self_cldr) => {
+                        self_cldr.intersects(&head_cldr)
+                    },
+                });
+            },
+            None => {},
+        }
+        if head_collide_self {
+            self.game_over = true;
+            return;
+        }
 
         let head_collide = other.collider().iter().any(
             |other_cldr| match other_cldr {
-                ColliderType::AABB(other_aabb) => head.intersects(other_aabb)});
+                ColliderType::AABB(other_aabb) => head_cldr.intersects(other_aabb)});
         if head_collide {
             self.length += LENGTH_PER_FOOD;
             self.speed += SPEED_PER_FOOD.clamp(0., MAX_SPEED);
         };
     }
     fn collider(&self) -> Vec<ColliderType> {
-        self.get_keypoints()
-            .iter()
-            .map(|kp| {
-                ColliderType::AABB(AABB::new(
+        let mut remaining_len = self.length;
+        let keypoints = self.get_keypoints();
+        let mut res = Vec::with_capacity(keypoints.len());
+        for i in (1..keypoints.len()).rev(){
+            let (n_1, n) = keypoints.split_at(i);
+            let (n_1, n) = (&n_1[i-1], &n[0]);
+            let len = n_1.dst_head - n.dst_head; 
+            remaining_len -= len;
+
+            let (small_x, big_x) = match n.at.x.total_cmp(&n_1.at.x) {
+                cmp::Ordering::Less => (n.at.x, n_1.at.x),
+                _ => (n_1.at.x, n.at.x),
+            };
+            let (small_y, big_y) = match n.at.y.total_cmp(&n_1.at.y) {
+                cmp::Ordering::Less => (n.at.y, n_1.at.y),
+                _ => (n_1.at.y, n.at.y),
+            };
+            let aabb = AABB::new(
+                Position {
+                    x: small_x - self.radius * 0.9,
+                    y: small_y - self.radius * 0.9,
+                },
+                Position {
+                    x: big_x + self.radius * 0.9,
+                    y: big_y + self.radius * 0.9,
+                },
+            );
+            res.push(ColliderType::AABB(aabb));
+        };
+        let aabb = match keypoints[0].from {
+            MoveDir::Down => {
+                let small_x = keypoints[0].at.x - self.radius * 0.9;
+                let big_x = keypoints[0].at.x + self.radius * 0.9;
+                AABB::new(
                     Position {
-                        x: kp.at.x - self.radius * 0.9,
-                        y: kp.at.y - self.radius * 0.9,
+                        x: small_x,
+                        y: keypoints[0].at.y - remaining_len,
                     },
                     Position {
-                        x: kp.at.x + self.radius * 0.9,
-                        y: kp.at.y + self.radius * 0.9,
+                        x: big_x,
+                        y: keypoints[0].at.y + self.radius * 0.9,
                     },
-                ))
-            })
-            .collect()
+                )
+            },
+            MoveDir::Up => {
+                let small_x = keypoints[0].at.x - self.radius * 0.9;
+                let big_x = keypoints[0].at.x + self.radius * 0.9;
+                AABB::new(
+                    Position {
+                        x: small_x,
+                        y: keypoints[0].at.y - self.radius * 0.9,
+                    },
+                    Position {
+                        x: big_x,
+                        y: keypoints[0].at.y + remaining_len,
+                    },
+                )
+            },
+            MoveDir::Left => {
+                let small_y = keypoints[0].at.y - self.radius * 0.9;
+                let big_y = keypoints[0].at.y + self.radius * 0.9;
+                AABB::new(
+                    Position {
+                        x: keypoints[0].at.x - remaining_len,
+                        y: small_y,
+                    },
+                    Position {
+                        x: keypoints[0].at.x + self.radius * 0.9,
+                        y: big_y,
+                    },
+                )
+            },
+            MoveDir::Right => {
+                let small_y = keypoints[0].at.y - self.radius * 0.9;
+                let big_y = keypoints[0].at.y + self.radius * 0.9;
+                AABB::new(
+                    Position {
+                        x: keypoints[0].at.x - self.radius * 0.9,
+                        y: small_y,
+                    },
+                    Position {
+                        x: keypoints[0].at.x + remaining_len,
+                        y: big_y,
+                    },
+                )
+            }
+        };
+        res.push(ColliderType::AABB(aabb));
+        res
     }
 }
 
 impl InputListener for Snek {
-    fn on_input(&mut self, event: &winit::event::WindowEvent) {
+    fn on_input(&mut self, event: &winit::event::WindowEvent, board : &Board) {
         use winit::event::WindowEvent;
         use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -286,6 +400,7 @@ impl InputListener for Snek {
                     PhysicalKey::Code(KeyCode::ArrowUp) | PhysicalKey::Code(KeyCode::KeyW) => {
                         match self.dir {
                             MoveDir::Down | MoveDir::Up => {}
+                            _ if self.position.y > board.height - board.grid_size => {}
                             _ => {
                                 self.dir_candidate = Some(MoveDir::Up);
                             }
@@ -294,6 +409,7 @@ impl InputListener for Snek {
                     PhysicalKey::Code(KeyCode::ArrowLeft) | PhysicalKey::Code(KeyCode::KeyA) => {
                         match self.dir {
                             MoveDir::Right | MoveDir::Left => {}
+                            _ if self.position.x < board.grid_size => {}
                             _ => {
                                 self.dir_candidate = Some(MoveDir::Left);
                             }
@@ -302,6 +418,7 @@ impl InputListener for Snek {
                     PhysicalKey::Code(KeyCode::ArrowRight) | PhysicalKey::Code(KeyCode::KeyD) => {
                         match self.dir {
                             MoveDir::Left | MoveDir::Right => {}
+                            _ if self.position.x > board.width - board.grid_size => {}
                             _ => {
                                 self.dir_candidate = Some(MoveDir::Right);
                             }
@@ -310,6 +427,7 @@ impl InputListener for Snek {
                     PhysicalKey::Code(KeyCode::ArrowDown) | PhysicalKey::Code(KeyCode::KeyS) => {
                         match self.dir {
                             MoveDir::Up | MoveDir::Down => {}
+                            _ if self.position.y < board.grid_size => {}
                             _ => {
                                 self.dir_candidate = Some(MoveDir::Down);
                             }

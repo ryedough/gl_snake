@@ -59,6 +59,16 @@ impl App {
         _self
     }
 
+    fn clear(&mut self) {
+        self.updateable_ids.clear();
+        self.input_listener_ids.clear();
+        self.collider_ids.clear();
+        self.owned_data.clear();
+        self.owned_data_counter = 0;
+        self.fps.clear();
+        self.render_count = 0;
+    }
+
     fn after_on_app_init(&mut self) {
         for idx in &mut self.updateable_ids {
             self.owned_data
@@ -68,6 +78,16 @@ impl App {
                 .expect("updateable ids should always fetch updateable from owned data")
                 .on_setup(&self.gl, *idx, &self.board);       
         }
+    }
+
+    fn on_game_over(&mut self) {
+        // reset everything
+        self.clear();
+        self.board = Board::new(WINDOW_WIDTH, WINDOW_HEIGHT, 25);
+        self.t_0 = time::SystemTime::now();
+        self.t_last_render = time::SystemTime::now();
+        (self.on_app_init)(self);
+        self.after_on_app_init();
     }
 
     // become owner of taken data
@@ -109,13 +129,18 @@ impl App {
             self.gl.clear(COLOR_BUFFER_BIT);
         }
 
+        let mut is_game_over = false;
+
         for idx in &self.updateable_ids {
             self.owned_data
                 .get_mut(idx)
                 .expect("updateable ids should always updated to match existing item")
                 .as_updateable()
                 .expect("updateable ids should always fetch updateable from owned data")
-                .on_tick(&self.gl, &time, &self.board);
+                .on_tick(&self.gl, &time, &self.board, &mut || {is_game_over = true});
+        }
+        if is_game_over {
+            return self.on_game_over();
         }
         for (arr_s, idx_a) in self.collider_ids.iter().enumerate() {
             for idx_b in &self.collider_ids[arr_s+1..] {
@@ -176,7 +201,7 @@ impl App {
                         .expect("input listener ids should always updated to match existing item")
                         .as_input_listener()
                         .expect("input listener ids should always fetch input listener from owned data")
-                        .on_input(&event);
+                        .on_input(&event, &self.board);
                 }
             },
             _ => {},

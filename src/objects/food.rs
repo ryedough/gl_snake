@@ -48,7 +48,7 @@ impl Setupable for Food {
 }
 
 impl Updateable for Food {
-    fn on_tick(&mut self, gl: &glow::Context, time : &crate::app::app_owned_data::Time, board: &crate::app::board::Board) {
+    fn on_tick(&mut self, gl: &glow::Context, time : &crate::app::app_owned_data::Time, board: &crate::app::board::Board, _ : &mut dyn FnMut()) {
         if self.collided_with_player {
             self.get_new_pos(board);
             self.collided_with_player = false;

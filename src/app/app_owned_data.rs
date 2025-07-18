@@ -86,7 +86,7 @@ pub trait InputListener : Setupable
 where
     Self: 'static,
 {
-    fn on_input(&mut self, event: &winit::event::WindowEvent);
+    fn on_input(&mut self, event: &winit::event::WindowEvent, board : &Board);
 }
 
 pub struct Time<'a> {
@@ -98,7 +98,7 @@ where
     Self: 'static,
 {
     /// Can also render inside this function
-    fn on_tick(&mut self, gl: &glow::Context, time : &Time, board: &Board);
+    fn on_tick(&mut self, gl: &glow::Context, time : &Time, board: &Board, game_over : &mut dyn FnMut());
 }
 
 pub trait Collider : Setupable

@@ -57,7 +57,6 @@ impl ApplicationHandler for AppBootstraper {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let (window, gl_config) = match &self.gl_display {
             GlDisplayCreationState::Unbuilt(display_builder) => {
-                //first time resumed() called
                 let (window, config) = display_builder
                     .clone()
                     .build(event_loop, self.template.clone(), gl_config_picker)
@@ -92,13 +91,12 @@ impl ApplicationHandler for AppBootstraper {
         let gl_context = self.gl_context.as_ref().unwrap();
         gl_context.make_current(&gl_surface).unwrap();
 
+        //create app
         self.app.get_or_insert_with(|| {
-            //first time resumed() called
             let gl = unsafe { glow::Context::from_loader_function_cstr(|s|self.gl_context.as_ref().unwrap().display().get_proc_address(s)) };
-            let mut renderer = App::new(gl);
-            (self.on_app_init)(&mut renderer);
-            renderer.after_on_app_init();
-            renderer
+            let mut app = App::new(gl, self.on_app_init);
+            app.after_on_app_init();
+            app
         });
 
         assert!(

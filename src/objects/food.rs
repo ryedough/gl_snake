@@ -54,6 +54,7 @@ impl Updateable for Food {
             self.collided_with_player = false;
         }
         self.shader.use_shader(gl);
+        self.shader.set_time(gl, (time.elapsed.as_secs_f64() * 10.).sin() as f32);
         self.shader.set_position(gl, self.position.x, self.position.y);
         self.mesh.render(gl);
     }

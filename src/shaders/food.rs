@@ -8,6 +8,7 @@ pub struct FoodShader {
     program: NativeProgram,
     u_radius: NativeUniformLocation,
     u_position: NativeUniformLocation,
+    u_time: NativeUniformLocation,
     attributes: HashMap<String, u32>,
 }
 
@@ -21,10 +22,11 @@ impl FoodShader {
         };
         let program = gen_program(gl, &vs, &fs).unwrap();
 
-        let (u_radius, u_position) = unsafe {
+        let (u_radius, u_position, u_time) = unsafe {
             (
                 gl.get_uniform_location(program, "uRadius").unwrap(),
                 gl.get_uniform_location(program, "uPosition").unwrap(),
+                gl.get_uniform_location(program, "uTime").unwrap(),
             )
         };
 
@@ -32,12 +34,18 @@ impl FoodShader {
             program,
             u_radius,
             u_position,
+            u_time,
             attributes: HashMap::from(attributes),
         }
     }
     pub fn set_position(&self, gl: &glow::Context, x: f32, y: f32) {
         unsafe {
             gl.uniform_2_f32(Some(&self.u_position), x, y);
+        }
+    }
+    pub fn set_time(&self, gl: &glow::Context, x: f32) {
+        unsafe {
+            gl.uniform_1_f32(Some(&self.u_time), x);
         }
     }
     pub fn set_radius(&self, gl: &glow::Context, x: f32) {
